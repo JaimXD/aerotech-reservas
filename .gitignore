@@ -1,0 +1,56 @@
+# Python / Flask
+backend_flask/.venv/
+backend_flask/venv/
+backend_flask/env/
+backend_flask/.env
+backend_flask/__pycache__/
+backend_flask/**/*.pyc
+backend_flask/**/*.pyo
+backend_flask/**/*.pyd
+backend_flask/.pytest_cache/
+backend_flask/.coverage
+backend_flask/htmlcov/
+backend_flask/instance/
+
+# Flutter / Dart (Standard ignores for root-level view, though app_aerea has its own)
+app_aerea/.dart_tool/
+app_aerea/.flutter-plugins
+app_aerea/.flutter-plugins-dependencies
+app_aerea/.pub-cache/
+app_aerea/.pub/
+app_aerea/build/
+app_aerea/android/app/debug/
+app_aerea/android/app/profile/
+app_aerea/android/app/release/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# OS files
+Thumbs.db
+db.properties
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Icon?
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Variables de entorno: nunca subir secretos
+.env
+.env.*
+!.env.example
+
+# Python (en cualquier carpeta)
+__pycache__/
+*.py[cod]
