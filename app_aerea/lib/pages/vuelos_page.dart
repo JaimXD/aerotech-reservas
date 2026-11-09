@@ -712,7 +712,6 @@ class _VuelosPageState extends State<VuelosPage> {
               padding: const EdgeInsets.only(bottom: 8),
               child: _OpcionFranja(
                 franja: f,
-                cantidad: delDia.where((v) => Franja.de(v) == f).length,
                 activa: !_franjasOcultas.contains(f),
                 onTap: () => setState(() {
                   if (!_franjasOcultas.remove(f)) _franjasOcultas.add(f);
@@ -1274,13 +1273,11 @@ class _TituloFiltro extends StatelessWidget {
 
 class _OpcionFranja extends StatelessWidget {
   final Franja franja;
-  final int cantidad;
   final bool activa;
   final VoidCallback onTap;
 
   const _OpcionFranja({
     required this.franja,
-    required this.cantidad,
     required this.activa,
     required this.onTap,
   });
@@ -1328,11 +1325,6 @@ class _OpcionFranja extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
-                Text(
-                  '$cantidad',
-                  style: const TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary),
                 ),
               ],
             ),

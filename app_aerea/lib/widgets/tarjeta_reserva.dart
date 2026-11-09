@@ -41,16 +41,23 @@ class TarjetaReserva extends StatelessWidget {
   final VoidCallback? onCambiarVuelo;
   final VoidCallback? onCancelar;
 
+  /// Ver / descargar la factura XML (null en reservas canceladas).
+  final VoidCallback? onFactura;
+
   const TarjetaReserva({
     super.key,
     required this.reserva,
     this.onCambiarAsientos,
     this.onCambiarVuelo,
     this.onCancelar,
+    this.onFactura,
   });
 
   bool get _hayAcciones =>
-      onCambiarAsientos != null || onCambiarVuelo != null || onCancelar != null;
+      onCambiarAsientos != null ||
+      onCambiarVuelo != null ||
+      onCancelar != null ||
+      onFactura != null;
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +160,23 @@ class TarjetaReserva extends StatelessWidget {
             child: const Text('Cancelar reserva'),
           );
 
+    final factura = onFactura == null
+        ? null
+        : OutlinedButton.icon(
+            onPressed: onFactura,
+            icon: const Icon(Icons.receipt_long_outlined, size: 20),
+            label: const Text('Factura XML'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.secondary,
+              minimumSize: const Size.fromHeight(48),
+              side: const BorderSide(color: AppColors.border),
+              textStyle:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -161,6 +185,10 @@ class TarjetaReserva extends StatelessWidget {
         if (cambiarVuelo != null) ...[
           const SizedBox(height: 10),
           cambiarVuelo,
+        ],
+        if (factura != null) ...[
+          const SizedBox(height: 10),
+          factura,
         ],
         if (cancelar != null) ...[
           const SizedBox(height: 6),

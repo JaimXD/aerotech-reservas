@@ -7,6 +7,7 @@ import '../widgets/barra_superior.dart';
 import '../widgets/custom_toast.dart';
 import '../widgets/dialogos_reserva.dart';
 import '../widgets/tarjeta_reserva.dart';
+import '../widgets/dialogo_factura.dart';
 import 'login_page.dart';
 import 'seleccion_asientos_page.dart';
 
@@ -171,6 +172,8 @@ class _ReservasPageState extends State<ReservasPage> {
       onCambiarAsientos: accion(_cambiarAsientos),
       onCambiarVuelo: accion(_cambiarVuelo),
       onCancelar: accion(_cancelar),
+      // La factura se abre encima del detalle (no hace falta cerrarlo)
+      onFactura: r.esCancelada ? null : () => mostrarFactura(context, r),
     );
   }
 

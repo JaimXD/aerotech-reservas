@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 
 from services.registro_service import RegistroService, ErrorRegistro
@@ -8,6 +8,8 @@ from services.vuelo_service import VueloService
 from services.reserva_service import ReservaService
 from services.asiento_service import AsientoService
 from services.admin_vuelo_service import AdminVueloService
+from services.factura_service import FacturaService, ErrorFactura
+
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +19,7 @@ vuelo_service = VueloService()
 reserva_service = ReservaService()
 asiento_service = AsientoService()
 admin_vuelo_service = AdminVueloService()
+factura_service = FacturaService()
 
 def obtener_usuario_desde_token():
     try:
@@ -246,6 +249,26 @@ def cancelar(reserva_id):
             "error": "No se pudo cancelar la reserva",
             "detalle": str(e)
         }), 400
+
+@app.route("/api/reservas/<int:reserva_id>/factura", methods=["GET"])
+def factura_reserva(reserva_id):
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        xml, nombre = factura_service.generar_factura_xml(usuario, reserva_id)
+        return Response(
+            xml,
+            mimetype="application/xml",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    except ErrorFactura as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error generando factura")
+        return jsonify({"error": "No se pudo generar la factura"}), 500
+
 
 @app.route("/reservas/<int:reserva_id>", methods=["PUT"])
 @app.route("/api/reservas/<int:reserva_id>", methods=["PUT"])
