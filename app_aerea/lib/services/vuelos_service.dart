@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/vuelo.dart';
+import '../models/ruta.dart';
 
 import 'session_manager.dart';
 
@@ -17,14 +18,18 @@ class VuelosService {
     if (origen != null && origen.isNotEmpty) params["origen"] = origen;
     if (destino != null && destino.isNotEmpty) params["destino"] = destino;
     if (fecha != null && fecha.isNotEmpty) params["fecha"] = fecha;
-    if (fechaInicio != null && fechaInicio.isNotEmpty) params["fecha_inicio"] = fechaInicio;
+    if (fechaInicio != null && fechaInicio.isNotEmpty)
+      params["fecha_inicio"] = fechaInicio;
     if (fechaFin != null && fechaFin.isNotEmpty) params["fecha_fin"] = fechaFin;
 
-    final uri = Uri.parse("${ApiConfig.baseUrl}/api/vuelos").replace(queryParameters: params);
+    final uri = Uri.parse("${ApiConfig.baseUrl}/api/vuelos")
+        .replace(queryParameters: params);
 
     final response = await http.get(
       uri,
-      headers: {"Authorization": "Bearer ${SessionManager().token ?? ApiConfig.token}"},
+      headers: {
+        "Authorization": "Bearer ${SessionManager().token ?? ApiConfig.token}"
+      },
     );
 
     if (response.statusCode == 200) {
@@ -37,5 +42,26 @@ class VuelosService {
     }
 
     throw Exception("No se pudieron obtener los vuelos");
+  }
+
+  /// Rutas (origen → destino) que tienen vuelos disponibles.
+  Future<List<Ruta>> obtenerRutas() async {
+    final response = await http.get(
+      Uri.parse("${ApiConfig.baseUrl}/api/vuelos/rutas"),
+      headers: {
+        "Authorization": "Bearer ${SessionManager().token ?? ApiConfig.token}"
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(utf8.decode(response.bodyBytes));
+      return data.map((e) => Ruta.fromJson(e)).toList();
+    }
+
+    if (response.statusCode == 401) {
+      throw Exception("Sesión expirada o token inválido");
+    }
+
+    throw Exception("No se pudieron obtener las ciudades");
   }
 }

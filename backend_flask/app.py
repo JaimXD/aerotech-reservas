@@ -48,8 +48,6 @@ def inicio():
         "arquitectura": "Flutter + Flask + Render + Supabase"
     })
 
-
-@app.route("/api/usuarios/registro", methods=["POST"])
 def _error_registro(e: ErrorRegistro):
     return jsonify({"error": str(e), **e.extra}), e.estado_http
 
@@ -154,6 +152,20 @@ def vuelos():
             "error": "No se pudieron obtener los vuelos",
             "detalle": str(e)
         }), 500
+
+
+@app.route("/api/vuelos/rutas", methods=["GET"])
+def rutas_vuelos():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(vuelo_service.listar_rutas()), 200
+    except Exception:
+        app.logger.exception("Error listando rutas")
+        return jsonify({"error": "No se pudieron obtener las ciudades"}), 500
+
 
 
 @app.route("/api/reservas", methods=["POST"])

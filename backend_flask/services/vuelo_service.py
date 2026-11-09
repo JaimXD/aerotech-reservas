@@ -46,3 +46,29 @@ class VueloService:
         finally:
             cursor.close()
             conexion.close()
+
+    def listar_rutas(self):
+        """Pares origen → destino que tienen vuelos disponibles desde hoy."""
+        conexion = Database.obtener_conexion()
+        cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        try:
+            cursor.execute("""
+                SELECT DISTINCT
+                       INITCAP(TRIM(origen))  AS origen,
+                       INITCAP(TRIM(destino)) AS destino
+                FROM vuelos
+                WHERE estado = TRUE
+                  AND asientos_disponibles > 0
+                  AND fecha >= CURRENT_DATE
+                ORDER BY origen, destino
+            """)
+            return [
+                {"origen": fila["origen"], "destino": fila["destino"]}
+                for fila in cursor.fetchall()
+            ]
+
+        finally:
+            cursor.close()
+            conexion.close()
+
