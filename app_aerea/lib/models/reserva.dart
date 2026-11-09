@@ -1,3 +1,5 @@
+import 'vuelo.dart';
+
 class Reserva {
   final int id;
   final int vueloId;
@@ -49,9 +51,40 @@ class Reserva {
       fechaLlegada: json["fecha_llegada"] ?? json["fecha_vuelo"],
       horaSalida: json["hora_salida"],
       horaLlegada: json["hora_llegada"],
-      asientos: json["asientos"] == null
-          ? []
-          : List<String>.from(json["asientos"]),
+      asientos:
+          json["asientos"] == null ? [] : List<String>.from(json["asientos"]),
     );
   }
+
+  // ── Datos calculados para la interfaz ──────────────────────────
+
+  /// El vuelo de esta reserva (sirve para abrir el mapa de asientos).
+  Vuelo get vuelo => Vuelo(
+        id: vueloId,
+        aerolinea: aerolinea,
+        origen: origen,
+        destino: destino,
+        fecha: fechaVuelo,
+        fechaLlegada: fechaLlegada,
+        horaSalida: horaSalida,
+        horaLlegada: horaLlegada,
+        precio: cantidadAsientos > 0 ? total / cantidadAsientos : 0,
+        asientosDisponibles: cantidadAsientos,
+      );
+
+  bool get activa => estado.toUpperCase() == 'ACTIVA';
+
+  /// El vuelo ya despegó.
+  bool get yaPaso => vuelo.salida.isBefore(DateTime.now());
+
+  /// Pestañas de "Mis viajes".
+  bool get esProxima => activa && !yaPaso;
+  bool get esPasada => activa && yaPaso;
+  bool get esCancelada => !activa;
+
+  /// Fecha en que se hizo la reserva (null si el backend envía otro formato).
+  DateTime? get reservadaEl => DateTime.tryParse(fechaReserva);
+
+  /// Asientos separados por coma: "12A, 12B".
+  String get textoAsientos => asientos.isEmpty ? '—' : asientos.join(', ');
 }

@@ -56,6 +56,16 @@ class Formato {
       '${_diasLargos[d.weekday - 1]} ${d.day} de ${_meses[d.month - 1]}';
 
   /// "Noviembre 2026"
+
+  /// "Jueves"
+  static String diaLargo(DateTime d) => _diasLargos[d.weekday - 1];
+
+  /// "DIC"
+  static String mesCorto(DateTime d) => _mesesCortos[d.month - 1].toUpperCase();
+
+  /// "2 nov 2026"
+  static String fechaConAnio(DateTime d) => '${fechaCorta(d)} ${d.year}';
+
   static String mesAnio(DateTime d) {
     final m = _meses[d.month - 1];
     return '${m[0].toUpperCase()}${m.substring(1)} ${d.year}';

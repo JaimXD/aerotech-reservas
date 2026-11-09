@@ -72,7 +72,7 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.reserva != null) {
+    if (widget.reserva != null && widget.reserva!.vueloId == widget.vuelo.id) {
       seleccionados = List<String>.from(widget.reserva!.asientos)
         ..sort(_ordenAsientos);
     }
