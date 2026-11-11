@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'carrito_service.dart';
 
 class SessionManager extends ChangeNotifier {
   static final SessionManager _instance = SessionManager._internal();
@@ -8,12 +9,12 @@ class SessionManager extends ChangeNotifier {
   SessionManager._internal();
 
   final _storage = const FlutterSecureStorage();
-  
+
   String? _token;
   String? _role;
   String? _username;
   String? _nombreCompleto;
-  
+
   String? get token => _token;
   String? get role => _role;
   String? get username => _username;
@@ -43,10 +44,10 @@ class SessionManager extends ChangeNotifier {
       if (storedToken == null) {
         return false;
       }
-      
+
       final payload = _decodeJwt(storedToken);
       final exp = payload["exp"] as int?;
-      
+
       if (exp != null) {
         final expDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
         if (DateTime.now().isAfter(expDate)) {
@@ -55,12 +56,12 @@ class SessionManager extends ChangeNotifier {
           return false;
         }
       }
-      
+
       _token = storedToken;
       _role = payload["role"] ?? payload["tipo_usuario"] ?? "user";
       _username = payload["usuario"];
       _nombreCompleto = payload["nombre_completo"];
-      
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -88,21 +89,24 @@ class SessionManager extends ChangeNotifier {
   // Save session upon successful login (HU-03, HU-05)
   Future<void> guardarSesion(String token) async {
     final payload = _decodeJwt(token);
-    
+
     // Ensure never two tokens coexist: delete first
     await _storage.delete(key: "auth_token");
     await _storage.write(key: "auth_token", value: token);
-    
+
     _token = token;
     _role = payload["role"] ?? payload["tipo_usuario"] ?? "user";
     _username = payload["usuario"];
     _nombreCompleto = payload["nombre_completo"];
-    
+
     notifyListeners();
   }
 
   // Clear session upon logout (HU-03)
   Future<void> cerrarSesion() async {
+    // Libera los asientos del carrito antes de borrar el token.
+    if (_token != null) await CarritoService().liberarTodo();
+
     await _storage.delete(key: "auth_token");
     _token = null;
     _role = null;

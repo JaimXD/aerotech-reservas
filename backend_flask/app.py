@@ -9,6 +9,7 @@ from services.reserva_service import ReservaService
 from services.asiento_service import AsientoService
 from services.admin_vuelo_service import AdminVueloService
 from services.factura_service import FacturaService, ErrorFactura
+from services.carrito_service import CarritoService, ErrorCarrito
 
 
 app = Flask(__name__)
@@ -20,6 +21,7 @@ reserva_service = ReservaService()
 asiento_service = AsientoService()
 admin_vuelo_service = AdminVueloService()
 factura_service = FacturaService()
+carrito_service = CarritoService()
 
 def obtener_usuario_desde_token():
     try:
@@ -316,7 +318,7 @@ def listar_asientos_vuelo(vuelo_id):
         return error, codigo
 
     try:
-        asientos = asiento_service.listar_asientos_por_vuelo(vuelo_id)
+        asientos = asiento_service.listar_asientos_por_vuelo(vuelo_id, usuario["id"])
 
         return jsonify(asientos), 200
 
@@ -371,6 +373,99 @@ def reservar_asientos():
             "error": "No se pudo registrar la reserva",
             "detalle": str(e)
         }), 400
+
+# ════════════════════════════════════════════════════════════════
+#  Carrito de compras (asientos apartados por 10 minutos)
+# ════════════════════════════════════════════════════════════════
+
+def _error_carrito(e: ErrorCarrito):
+    cuerpo = {"error": e.mensaje}
+    if e.asientos:
+        cuerpo["asientos"] = e.asientos
+    return jsonify(cuerpo), e.codigo
+
+
+@app.route("/api/carrito", methods=["GET"])
+def ver_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(carrito_service.obtener(usuario["id"])), 200
+    except Exception:
+        app.logger.exception("Error obteniendo el carrito")
+        return jsonify({"error": "No se pudo cargar tu carrito"}), 500
+
+
+@app.route("/api/carrito/items", methods=["POST"])
+def agregar_al_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    datos = request.get_json(silent=True) or {}
+    vuelo_id = datos.get("vuelo_id")
+
+    if not isinstance(vuelo_id, int):
+        return jsonify({"error": "El campo vuelo_id es obligatorio"}), 400
+
+    try:
+        carrito = carrito_service.agregar(usuario["id"], vuelo_id, datos.get("asientos"))
+        return jsonify(carrito), 200
+    except ErrorCarrito as e:
+        return _error_carrito(e)
+    except Exception:
+        app.logger.exception("Error agregando al carrito")
+        return jsonify({"error": "No se pudo agregar al carrito"}), 500
+
+
+@app.route("/api/carrito/items/<int:vuelo_id>", methods=["DELETE"])
+def quitar_del_carrito(vuelo_id):
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(carrito_service.quitar(usuario["id"], vuelo_id)), 200
+    except Exception:
+        app.logger.exception("Error quitando del carrito")
+        return jsonify({"error": "No se pudo quitar el vuelo"}), 500
+
+
+@app.route("/api/carrito", methods=["DELETE"])
+def vaciar_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(carrito_service.vaciar(usuario["id"])), 200
+    except Exception:
+        app.logger.exception("Error vaciando el carrito")
+        return jsonify({"error": "No se pudo vaciar el carrito"}), 500
+
+
+@app.route("/api/carrito/confirmar", methods=["POST"])
+def confirmar_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    datos = request.get_json(silent=True) or {}
+    esperados = [v for v in datos.get("vuelo_ids") or [] if isinstance(v, int)]
+
+    try:
+        resultado = carrito_service.confirmar(usuario["id"], esperados)
+    except ErrorCarrito as e:
+        return _error_carrito(e)
+    except Exception:
+        app.logger.exception("Error confirmando el carrito")
+        return jsonify({"error": "No se pudo completar la compra"}), 500
+
+    # 201 si se compró algo; 409 si todo falló por concurrencia o tiempo.
+    return jsonify(resultado), 201 if resultado["confirmadas"] else 409
+
 
 @app.route("/api/admin/vuelos", methods=["POST"])
 def crear_vuelo():

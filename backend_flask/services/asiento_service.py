@@ -5,24 +5,38 @@ from models.asiento_model import AsientoModel
 
 class AsientoService:
 
-    def listar_asientos_por_vuelo(self, vuelo_id):
+    def listar_asientos_por_vuelo(self, vuelo_id, usuario_id=None):
         conexion = Database.obtener_conexion()
         cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         try:
+            # Un asiento apartado por OTRA persona se envía como BLOQUEADO.
+            # Los que están en mi carrito llegan como DISPONIBLE + en_mi_carrito.
             cursor.execute("""
-                SELECT 
+                SELECT
                     id,
                     vuelo_id,
                     numero_asiento,
-                    estado,
-                    reserva_id
+                    CASE
+                        WHEN estado = 'DISPONIBLE'
+                         AND bloqueado_hasta > NOW()
+                         AND bloqueado_por IS DISTINCT FROM %s
+                        THEN 'BLOQUEADO'
+                        ELSE estado
+                    END AS estado,
+                    reserva_id,
+                    COALESCE(
+                        estado = 'DISPONIBLE'
+                        AND bloqueado_hasta > NOW()
+                        AND bloqueado_por = %s,
+                        FALSE
+                    ) AS en_mi_carrito
                 FROM asientos_vuelo
                 WHERE vuelo_id = %s
                 ORDER BY 
                     CAST(regexp_replace(numero_asiento, '[^0-9]', '', 'g') AS INT),
                     regexp_replace(numero_asiento, '[0-9]', '', 'g')
-            """, (vuelo_id,))
+            """, (usuario_id, usuario_id, vuelo_id))
 
             asientos = []
 

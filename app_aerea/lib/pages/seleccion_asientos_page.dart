@@ -5,18 +5,25 @@ import '../models/asiento.dart';
 import '../models/reserva.dart';
 import '../models/vuelo.dart';
 import '../services/asiento_service.dart';
+import '../services/carrito_service.dart';
 import '../services/reservas_service.dart';
+import '../utils/formato.dart';
 import '../widgets/asiento_boton.dart';
 import '../widgets/custom_toast.dart';
+import 'carrito_page.dart';
 
 class SeleccionAsientosPage extends StatefulWidget {
   final Vuelo vuelo;
   final Reserva? reserva;
 
+  /// true cuando se abre desde "Cambiar asientos" del carrito.
+  final bool desdeCarrito;
+
   const SeleccionAsientosPage({
     super.key,
     required this.vuelo,
     this.reserva,
+    this.desdeCarrito = false,
   });
 
   @override
@@ -61,6 +68,9 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
 
   final AsientoService asientoService = AsientoService();
   final ReservasService reservasService = ReservasService();
+  final CarritoService carritoService = CarritoService();
+
+  static const double _iva = 0.15;
 
   List<Asiento> asientos = [];
   List<String> seleccionados = [];
@@ -68,6 +78,13 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
   bool cargando = true;
   bool reservando = false;
   String mensaje = "";
+
+  /// Este vuelo ya tiene asientos en mi carrito.
+  bool enCarrito = false;
+  bool _primeraCarga = true;
+
+  /// true = agregar al carrito; false = modificar una reserva existente.
+  bool get modoCarrito => widget.reserva == null;
 
   @override
   void initState() {
@@ -106,7 +123,21 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
         return asiento;
       }).toList();
 
-      setState(() => asientos = mapeados);
+      // Si ya tenía asientos de este vuelo en el carrito, se muestran elegidos.
+      final mios = data
+          .where((a) => a.enMiCarrito)
+          .map((a) => a.numeroAsiento)
+          .toList()
+        ..sort(_ordenAsientos);
+
+      setState(() {
+        asientos = mapeados;
+        if (modoCarrito) {
+          enCarrito = mios.isNotEmpty;
+          if (_primeraCarga) seleccionados = mios;
+        }
+        _primeraCarga = false;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => mensaje = "No se pudieron cargar los asientos.");
@@ -157,12 +188,15 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
   }
 
   double get total => seleccionados.length * widget.vuelo.precio;
+  double get iva => (total * _iva * 100).roundToDouble() / 100;
+  double get totalConIva => total + iva;
 
   Future<void> reservar() async {
     if (seleccionados.isEmpty) {
       setState(() => mensaje = "Debe seleccionar al menos un asiento.");
       return;
     }
+    if (modoCarrito) return _agregarAlCarrito();
 
     setState(() {
       reservando = true;
@@ -170,25 +204,13 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
     });
 
     try {
-      if (widget.reserva != null) {
-        await reservasService.editarReserva(
-          widget.reserva!.id,
-          widget.vuelo.id,
-          seleccionados,
-        );
-        if (!mounted) return;
-        CustomToast.showSuccess(context, "Reserva modificada correctamente");
-      } else {
-        final respuesta = await asientoService.reservarAsientos(
-          vueloId: widget.vuelo.id,
-          asientos: seleccionados,
-        );
-        final codigo = respuesta["reserva"]["codigo_reserva"];
-        if (!mounted) return;
-        CustomToast.showSuccess(
-            context, "Reserva creada correctamente: $codigo");
-      }
-
+      await reservasService.editarReserva(
+        widget.reserva!.id,
+        widget.vuelo.id,
+        seleccionados,
+      );
+      if (!mounted) return;
+      CustomToast.showSuccess(context, "Reserva modificada correctamente");
       Navigator.pop(context);
     } catch (e) {
       final textoError = e.toString();
@@ -210,7 +232,6 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
 
       setState(() {
         mensaje = mensajeLimpio;
-        if (widget.reserva == null) seleccionados.clear();
         reservando = false;
       });
 
@@ -219,6 +240,88 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
     } finally {
       if (mounted) setState(() => reservando = false);
     }
+  }
+
+  /// Aparta los asientos por 10 minutos. Si alguien los tomó primero,
+  /// el servidor responde 409 y se avisa al usuario.
+  Future<void> _agregarAlCarrito() async {
+    setState(() {
+      reservando = true;
+      mensaje = "";
+    });
+
+    try {
+      final carrito =
+          await carritoService.agregar(widget.vuelo.id, seleccionados);
+      if (!mounted) return;
+
+      final ruta = '${widget.vuelo.origen} → ${widget.vuelo.destino}';
+
+      if (widget.desdeCarrito) {
+        CustomToast.showSuccess(context, 'Asientos de $ruta actualizados');
+        Navigator.pop(context);
+        return;
+      }
+
+      setState(() => enCarrito = true);
+      _avisoAgregado(ruta, carrito.items.length);
+    } on CarritoException catch (e) {
+      if (!mounted) return;
+      final texto =
+          e.conflicto ? 'Concurrencia detectada: ${e.mensaje}' : e.mensaje;
+      CustomToast.showError(context, e.mensaje);
+      setState(() {
+        mensaje = texto;
+        seleccionados.removeWhere(e.asientosTomados.contains);
+        reservando = false;
+      });
+      // Se recarga el mapa para mostrar el estado real de los asientos.
+      await cargarAsientos(limpiarMensaje: false);
+    } catch (e) {
+      if (!mounted) return;
+      CustomToast.showError(context, e);
+    } finally {
+      if (mounted) setState(() => reservando = false);
+    }
+  }
+
+  /// Aviso inferior con el botón "Ver carrito".
+  void _avisoAgregado(String ruta, int cantidad) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.primary,
+        duration: const Duration(seconds: 6),
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Row(
+          children: [
+            const Icon(Icons.check_rounded, color: Color(0xFF8FD19E)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '$ruta agregado al carrito',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'Ver carrito ($cantidad)',
+          textColor: const Color(0xFFD9B8A0),
+          onPressed: () {
+            if (!mounted) return;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const CarritoPage()),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   // ─────────────────────── Formato ───────────────────────
@@ -748,25 +851,28 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
           const SizedBox(height: 10),
           const Divider(height: 1, color: AppColors.divider),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Total de la reserva',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary),
-              ),
-              Text(
-                '\$${total.toStringAsFixed(2)}',
-                style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary),
-              ),
-            ],
-          ),
+          if (modoCarrito)
+            ..._totalesCarrito(n)
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Total de la reserva',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary),
+                ),
+                Text(
+                  '\$${total.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary),
+                ),
+              ],
+            ),
           if (mensaje.isNotEmpty && asientos.isNotEmpty) ...[
             const SizedBox(height: 16),
             _aviso(),
@@ -774,15 +880,62 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
           const SizedBox(height: 18),
           _botonConfirmar(haySeleccion),
           const SizedBox(height: 10),
-          const Text(
-            'Si otra persona toma un asiento antes de confirmar, te avisaremos para que elijas otro.',
+          Text(
+            modoCarrito
+                ? 'Al agregarlos, tus asientos quedan apartados por 10 minutos y nadie más puede tomarlos.'
+                : 'Si otra persona toma un asiento antes de confirmar, te avisaremos para que elijas otro.',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
                 fontSize: 12, height: 1.5, color: AppColors.textSecondary),
           ),
         ],
       ),
     );
+  }
+
+  /// "2 × $89.00", IVA y total (lo mismo que se verá en el carrito).
+  List<Widget> _totalesCarrito(int n) {
+    Widget linea(String a, String b) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(a,
+                  style: const TextStyle(
+                      fontSize: 14, color: AppColors.textSecondary)),
+              Text(b,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary)),
+            ],
+          ),
+        );
+
+    return [
+      linea(
+          '$n × ${Formato.dinero(widget.vuelo.precio)}', Formato.dinero(total)),
+      linea('IVA (15 %)', Formato.dinero(iva)),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Total',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary),
+          ),
+          Text(
+            Formato.dinero(totalConIva),
+            style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary),
+          ),
+        ],
+      ),
+    ];
   }
 
   Widget _chipAsiento(String numero) {
@@ -855,7 +1008,9 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
     final activo = haySeleccion && !reservando;
     final texto = reservando
         ? 'Procesando...'
-        : (widget.reserva != null ? 'Modificar reserva' : 'Confirmar reserva');
+        : !modoCarrito
+            ? 'Modificar reserva'
+            : (enCarrito ? 'Actualizar carrito' : 'Agregar al carrito');
     final colorTexto =
         activo || reservando ? Colors.white : AppColors.textSecondary;
 
@@ -895,8 +1050,12 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white),
                       )
-                    : Icon(Icons.check_circle_outline_rounded,
-                        color: colorTexto, size: 20),
+                    : Icon(
+                        modoCarrito
+                            ? Icons.shopping_cart_outlined
+                            : Icons.check_circle_outline_rounded,
+                        color: colorTexto,
+                        size: 20),
                 const SizedBox(width: 10),
                 Text(
                   texto,

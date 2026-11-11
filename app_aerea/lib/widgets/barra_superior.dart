@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
+import '../pages/carrito_page.dart';
+import '../services/carrito_service.dart';
 import '../services/session_manager.dart';
 
 enum SeccionApp { vuelos, reservas }
@@ -17,6 +19,9 @@ class BarraSuperior extends StatelessWidget {
   /// que diseñemos la vista del administrador).
   final VoidCallback? onCrearVuelo;
 
+  /// Muestra el ícono del carrito (se oculta dentro del propio carrito).
+  final bool mostrarCarrito;
+
   const BarraSuperior({
     super.key,
     required this.actual,
@@ -25,6 +30,7 @@ class BarraSuperior extends StatelessWidget {
     this.onReservas,
     this.onPerfil,
     this.onCrearVuelo,
+    this.mostrarCarrito = true,
   });
 
   @override
@@ -71,6 +77,10 @@ class BarraSuperior extends StatelessWidget {
                               onTap: onCrearVuelo),
                         ],
                         const Spacer(),
+                        if (mostrarCarrito) ...[
+                          const _BotonCarrito(),
+                          SizedBox(width: compacto ? 4 : 12),
+                        ],
                         _MenuCuenta(
                           nombre: nombre,
                           usuario: session.username,
@@ -168,6 +178,51 @@ class _EnlaceNav extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Ícono del carrito con el número de vuelos apartados.
+class _BotonCarrito extends StatefulWidget {
+  const _BotonCarrito();
+
+  @override
+  State<_BotonCarrito> createState() => _BotonCarritoState();
+}
+
+class _BotonCarritoState extends State<_BotonCarrito> {
+  final CarritoService _carrito = CarritoService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Actualiza el contador al entrar a cada página (sin mostrar errores).
+    _carrito.cargar().catchError((_) => _carrito.carrito);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _carrito,
+      builder: (context, _) {
+        final n = _carrito.cantidad;
+        return IconButton(
+          tooltip: n == 0 ? 'Carrito' : 'Carrito: $n vuelo${n == 1 ? '' : 's'}',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CarritoPage()),
+          ),
+          icon: Badge(
+            isLabelVisible: n > 0,
+            label: Text('$n'),
+            backgroundColor: const Color(0xFFD9B8A0),
+            textColor: AppColors.primary,
+            child: const Icon(Icons.shopping_cart_outlined,
+                color: Colors.white, size: 24),
+          ),
+          style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
+        );
+      },
     );
   }
 }

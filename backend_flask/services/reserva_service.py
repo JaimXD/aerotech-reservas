@@ -271,7 +271,10 @@ class ReservaService:
                 WHERE vuelo_id = %s
                   AND numero_asiento = ANY(%s)
                   AND estado = 'DISPONIBLE'
-            """, (nuevo_vuelo_id, nuevos_asientos))
+                  AND (bloqueado_hasta IS NULL
+                       OR bloqueado_hasta <= NOW()
+                       OR bloqueado_por = %s)
+            """, (nuevo_vuelo_id, nuevos_asientos, usuario_id))
             cnt = cursor.fetchone()["cnt"]
 
             if cnt != nueva_cantidad:
@@ -281,7 +284,9 @@ class ReservaService:
             cursor.execute("""
                 UPDATE asientos_vuelo
                 SET estado = 'RESERVADO',
-                    reserva_id = %s
+                    reserva_id = %s,
+                    bloqueado_por = NULL,
+                    bloqueado_hasta = NULL
                 WHERE vuelo_id = %s
                   AND numero_asiento = ANY(%s)
             """, (reserva_id, nuevo_vuelo_id, nuevos_asientos))
