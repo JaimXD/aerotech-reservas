@@ -124,6 +124,21 @@ def login():
             "detalle": str(e)
         }), 500
 
+@app.route("/api/usuarios/perfil", methods=["GET"])
+def perfil_usuario():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        perfil = auth_service.obtener_perfil(usuario["id"])
+        if perfil is None:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+        return jsonify(perfil), 200
+    except Exception:
+        app.logger.exception("Error obteniendo perfil")
+        return jsonify({"error": "No se pudo cargar tu perfil"}), 500
+
 
 @app.route("/api/vuelos", methods=["GET"])
 def vuelos():

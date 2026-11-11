@@ -105,3 +105,36 @@ class AuthService:
         finally:
             cursor.close()
             conexion.close()
+
+    def obtener_perfil(self, usuario_id):
+        """Datos de la cuenta para la pantalla "Mi perfil" (sin contraseña ni cédula)."""
+        conexion = Database.obtener_conexion()
+        cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        try:
+            cursor.execute("""
+                SELECT id, usuario, nombre_completo, correo, rol,
+                       correo_verificado, fecha_creacion
+                FROM usuarios
+                WHERE id = %s AND estado = TRUE
+            """, (usuario_id,))
+
+            fila = cursor.fetchone()
+            if fila is None:
+                return None
+
+            return {
+                "id": fila["id"],
+                "usuario": fila["usuario"],
+                "nombre_completo": fila["nombre_completo"],
+                "correo": fila["correo"],
+                "rol": fila["rol"],
+                "correo_verificado": bool(fila["correo_verificado"]),
+                "fecha_creacion": fila["fecha_creacion"].isoformat()
+                if fila["fecha_creacion"] else None,
+            }
+
+        finally:
+            cursor.close()
+            conexion.close()
+

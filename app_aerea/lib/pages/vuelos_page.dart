@@ -11,6 +11,7 @@ import '../widgets/selector_fechas.dart';
 import '../widgets/vuelo_card.dart';
 import 'crear_vuelo_page.dart';
 import 'login_page.dart';
+import 'perfil_page.dart';
 import 'reservas_page.dart';
 import 'seleccion_asientos_page.dart';
 import '../models/ruta.dart';
@@ -338,6 +339,13 @@ class _VuelosPageState extends State<VuelosPage> {
     ).then((_) => _buscar(recargar: true));
   }
 
+  void _abrirPerfil() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PerfilPage()),
+    ).then((_) => _buscar(recargar: true));
+  }
+
   void _abrirMisReservas() {
     Navigator.push(
       context,
@@ -406,6 +414,7 @@ class _VuelosPageState extends State<VuelosPage> {
           BarraSuperior(
             actual: SeccionApp.vuelos,
             onReservas: _abrirMisReservas,
+            onPerfil: _abrirPerfil,
             onCerrarSesion: _cerrarSesion,
             onCrearVuelo: _session.isAdmin ? _abrirCrearVuelo : null,
           ),

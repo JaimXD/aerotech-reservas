@@ -6,9 +6,11 @@ enum SeccionApp { vuelos, reservas }
 
 /// Barra superior de la app (logo, navegación y menú de cuenta).
 class BarraSuperior extends StatelessWidget {
-  final SeccionApp actual;
+  /// Enlace subrayado. null = ninguno (por ejemplo, en "Mi perfil").
+  final SeccionApp? actual;
   final VoidCallback? onVuelos;
   final VoidCallback? onReservas;
+  final VoidCallback? onPerfil;
   final VoidCallback onCerrarSesion;
 
   /// Solo se pasa cuando el usuario es administrador (temporal, hasta
@@ -21,6 +23,7 @@ class BarraSuperior extends StatelessWidget {
     required this.onCerrarSesion,
     this.onVuelos,
     this.onReservas,
+    this.onPerfil,
     this.onCrearVuelo,
   });
 
@@ -72,7 +75,7 @@ class BarraSuperior extends StatelessWidget {
                           nombre: nombre,
                           usuario: session.username,
                           compacto: compacto,
-                          onReservas: onReservas,
+                          onPerfil: onPerfil,
                           onCerrarSesion: onCerrarSesion,
                         ),
                       ],
@@ -173,7 +176,7 @@ class _MenuCuenta extends StatelessWidget {
   final String nombre;
   final String? usuario;
   final bool compacto;
-  final VoidCallback? onReservas;
+  final VoidCallback? onPerfil;
   final VoidCallback onCerrarSesion;
 
   const _MenuCuenta({
@@ -181,7 +184,7 @@ class _MenuCuenta extends StatelessWidget {
     required this.usuario,
     required this.compacto,
     required this.onCerrarSesion,
-    this.onReservas,
+    this.onPerfil,
   });
 
   String get _iniciales {
@@ -209,7 +212,7 @@ class _MenuCuenta extends StatelessWidget {
       offset: const Offset(0, 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (valor) {
-        if (valor == 'reservas') onReservas?.call();
+        if (valor == 'perfil') onPerfil?.call();
         if (valor == 'salir') onCerrarSesion();
       },
       itemBuilder: (_) => [
@@ -237,15 +240,15 @@ class _MenuCuenta extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
-        if (onReservas != null)
+        if (onPerfil != null)
           const PopupMenuItem<String>(
-            value: 'reservas',
+            value: 'perfil',
             child: Row(
               children: [
-                Icon(Icons.confirmation_number_outlined,
+                Icon(Icons.person_outline,
                     size: 20, color: AppColors.secondary),
                 SizedBox(width: 12),
-                Text('Mis reservas'),
+                Text('Mi perfil'),
               ],
             ),
           ),

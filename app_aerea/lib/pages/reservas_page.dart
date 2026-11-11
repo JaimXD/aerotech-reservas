@@ -9,6 +9,7 @@ import '../widgets/dialogos_reserva.dart';
 import '../widgets/tarjeta_reserva.dart';
 import '../widgets/dialogo_factura.dart';
 import 'login_page.dart';
+import 'perfil_page.dart';
 import 'seleccion_asientos_page.dart';
 
 enum _Pestana {
@@ -110,6 +111,13 @@ class _ReservasPageState extends State<ReservasPage> {
   // ════════════════════════════════════════════════════════════════
 
   void _irAVuelos() => Navigator.of(context).maybePop();
+
+  void _abrirPerfil() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const PerfilPage()),
+    );
+  }
 
   Future<void> _cerrarSesion() async {
     await SessionManager().cerrarSesion();
@@ -224,6 +232,7 @@ class _ReservasPageState extends State<ReservasPage> {
           BarraSuperior(
             actual: SeccionApp.reservas,
             onVuelos: _irAVuelos,
+            onPerfil: _abrirPerfil,
             onCerrarSesion: _cerrarSesion,
           ),
           Expanded(
