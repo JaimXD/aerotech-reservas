@@ -8,6 +8,7 @@ import '../services/session_manager.dart';
 import '../widgets/custom_toast.dart';
 import 'registro_correo_page.dart';
 import 'vuelos_page.dart';
+import 'admin/admin_page.dart';
 
 /// Pantalla de acceso de AeroTech Reservas.
 ///
@@ -66,6 +67,10 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  /// El administrador entra a su panel; el cliente, a la búsqueda de vuelos.
+  Widget _paginaInicio() =>
+      sessionManager.isAdmin ? const AdminPage() : const VuelosPage();
+
   Future<void> verificarSesionActiva() async {
     try {
       final tieneSesion = await sessionManager.inicializarSesion();
@@ -73,7 +78,7 @@ class _LoginPageState extends State<LoginPage> {
       if (tieneSesion) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const VuelosPage()),
+          MaterialPageRoute(builder: (_) => _paginaInicio()),
         );
       }
       // No se muestra «Tu sesión ha expirado» cuando simplemente se abre
@@ -134,7 +139,7 @@ class _LoginPageState extends State<LoginPage> {
       CustomToast.showSuccess(context, 'Sesión iniciada correctamente');
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const VuelosPage()),
+        MaterialPageRoute(builder: (_) => _paginaInicio()),
       );
     } catch (e) {
       if (!mounted) return;

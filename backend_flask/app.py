@@ -10,6 +10,7 @@ from services.asiento_service import AsientoService
 from services.admin_vuelo_service import AdminVueloService
 from services.factura_service import FacturaService, ErrorFactura
 from services.carrito_service import CarritoService, ErrorCarrito
+from services.admin_service import AdminService
 
 
 app = Flask(__name__)
@@ -22,6 +23,7 @@ asiento_service = AsientoService()
 admin_vuelo_service = AdminVueloService()
 factura_service = FacturaService()
 carrito_service = CarritoService()
+admin_service = AdminService()
 
 def obtener_usuario_desde_token():
     try:
@@ -45,6 +47,15 @@ def obtener_usuario_desde_token():
     except Exception as e:
         print("Error al validar token:", repr(e))
         return None, jsonify({"error": "Error al validar token", "detalle": str(e)}), 500   
+
+def obtener_admin_desde_token():
+    """Igual que obtener_usuario_desde_token, pero además exige rol admin (403)."""
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return None, error, codigo
+    if usuario.get("role") != "admin":
+        return None, jsonify({"error": "No autorizado: se requiere rol de administrador"}), 403
+    return usuario, None, None
 
 @app.route("/")
 def inicio():
@@ -465,6 +476,18 @@ def confirmar_carrito():
 
     # 201 si se compró algo; 409 si todo falló por concurrencia o tiempo.
     return jsonify(resultado), 201 if resultado["confirmadas"] else 409
+
+@app.route("/api/admin/panel", methods=["GET"])
+def panel_admin():
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(admin_service.obtener_panel()), 200
+    except Exception:
+        app.logger.exception("Error obteniendo el panel del administrador")
+        return jsonify({"error": "No se pudo cargar el panel"}), 500
 
 
 @app.route("/api/admin/vuelos", methods=["POST"])
