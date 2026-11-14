@@ -5,6 +5,7 @@ import '../../services/session_manager.dart';
 import '../../widgets/admin/menu_lateral_admin.dart';
 import '../login_page.dart';
 import 'panel_admin_page.dart';
+import 'vuelos_admin_page.dart';
 
 /// Estructura del administrador: menú lateral + la sección elegida.
 ///
@@ -22,7 +23,19 @@ class _AdminPageState extends State<AdminPage> {
 
   SeccionAdmin _seccion = SeccionAdmin.panel;
 
-  void _ir(SeccionAdmin seccion) => setState(() => _seccion = seccion);
+  /// Cambia en cada visita para que la sección empiece desde su lista
+  /// (por ejemplo, al pulsar "Vuelos" estando en el detalle de un vuelo).
+  int _visita = 0;
+  bool _abrirNuevoVuelo = false;
+  int? _vueloInicial;
+
+  void _ir(SeccionAdmin seccion, {bool nuevoVuelo = false, int? vuelo}) =>
+      setState(() {
+        _seccion = seccion;
+        _visita++;
+        _abrirNuevoVuelo = nuevoVuelo;
+        _vueloInicial = vuelo;
+      });
 
   Future<void> _cerrarSesion() async {
     await SessionManager().cerrarSesion();
@@ -37,8 +50,17 @@ class _AdminPageState extends State<AdminPage> {
   Widget _contenido() {
     switch (_seccion) {
       case SeccionAdmin.panel:
-        return PanelAdminPage(onIrA: _ir);
+        return PanelAdminPage(
+          onIrA: _ir,
+          onNuevoVuelo: () => _ir(SeccionAdmin.vuelos, nuevoVuelo: true),
+          onVerVuelo: (id) => _ir(SeccionAdmin.vuelos, vuelo: id),
+        );
       case SeccionAdmin.vuelos:
+        return VuelosAdminPage(
+          key: ValueKey('vuelos-$_visita'),
+          abrirNuevo: _abrirNuevoVuelo,
+          vueloInicial: _vueloInicial,
+        );
       case SeccionAdmin.reservas:
       case SeccionAdmin.usuarios:
         // Se reemplazan en las siguientes secciones.

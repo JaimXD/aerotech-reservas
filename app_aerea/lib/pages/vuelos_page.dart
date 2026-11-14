@@ -9,7 +9,6 @@ import '../widgets/barra_superior.dart';
 import '../widgets/custom_toast.dart';
 import '../widgets/selector_fechas.dart';
 import '../widgets/vuelo_card.dart';
-import 'crear_vuelo_page.dart';
 import 'login_page.dart';
 import 'perfil_page.dart';
 import 'reservas_page.dart';
@@ -353,13 +352,6 @@ class _VuelosPageState extends State<VuelosPage> {
     ).then((_) => _buscar(recargar: true));
   }
 
-  void _abrirCrearVuelo() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CrearVueloPage()),
-    ).then((_) => _buscar(recargar: true));
-  }
-
   Future<void> _cerrarSesion() async {
     await _session.cerrarSesion();
     if (!mounted) return;
@@ -416,7 +408,6 @@ class _VuelosPageState extends State<VuelosPage> {
             onReservas: _abrirMisReservas,
             onPerfil: _abrirPerfil,
             onCerrarSesion: _cerrarSesion,
-            onCrearVuelo: _session.isAdmin ? _abrirCrearVuelo : null,
           ),
           Expanded(
             child: SingleChildScrollView(

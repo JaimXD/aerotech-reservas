@@ -7,7 +7,7 @@ from services.auth_service import AuthService
 from services.vuelo_service import VueloService
 from services.reserva_service import ReservaService
 from services.asiento_service import AsientoService
-from services.admin_vuelo_service import AdminVueloService
+from services.admin_vuelo_service import AdminVueloService, ErrorVuelo
 from services.factura_service import FacturaService, ErrorFactura
 from services.carrito_service import CarritoService, ErrorCarrito
 from services.admin_service import AdminService
@@ -490,54 +490,57 @@ def panel_admin():
         return jsonify({"error": "No se pudo cargar el panel"}), 500
 
 
-@app.route("/api/admin/vuelos", methods=["POST"])
-def crear_vuelo():
-    usuario, error, codigo = obtener_usuario_desde_token()
+# ───────────────────────── Administración de vuelos ─────────────────────────
 
+def _admin_vuelos(accion, codigo_exito=200):
+    """Valida que sea admin, ejecuta la acción y traduce los errores a JSON."""
+    usuario, error, codigo = obtener_admin_desde_token()
     if error:
         return error, codigo
-
-    if usuario.get("role") != "admin" and usuario.get("tipo_usuario") != "admin":
-        return jsonify({"error": "No autorizado: se requiere rol de administrador"}), 403
-
-    datos = request.get_json(silent=True)
-
-    if not datos:
-        return jsonify({
-            "error": "No se recibió JSON válido"
-        }), 400
-
-    campos = [
-        "aerolinea",
-        "origen",
-        "destino",
-        "fecha",
-        "fecha_llegada",
-        "hora_salida",
-        "hora_llegada",
-        "precio",
-        "cantidad_asientos"
-    ]
-
-    for campo in campos:
-        if datos.get(campo) is None or datos.get(campo) == "":
-            return jsonify({
-                "error": f"El campo {campo} es obligatorio"
-            }), 400
-
     try:
-        vuelo = admin_vuelo_service.crear_vuelo_con_asientos(datos)
+        return jsonify(accion()), codigo_exito
+    except ErrorVuelo as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error en la administración de vuelos")
+        return jsonify({"error": "Ocurrió un error inesperado. Intenta de nuevo."}), 500
 
-        return jsonify({
-            "mensaje": "Vuelo creado correctamente",
-            "vuelo": vuelo
-        }), 201
+@app.route("/api/admin/vuelos", methods=["GET"])
+def admin_listar_vuelos():
+    return _admin_vuelos(lambda: admin_vuelo_service.listar(
+        estado=request.args.get("estado"),
+        q=request.args.get("q"),
+        aerolinea=request.args.get("aerolinea"),
+        pagina=request.args.get("pagina", 1, type=int),
+    ))
 
-    except Exception as e:
-        return jsonify({
-            "error": "No se pudo crear el vuelo",
-            "detalle": str(e)
-        }), 400
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>", methods=["GET"])
+def admin_detalle_vuelo(vuelo_id):
+    return _admin_vuelos(lambda: admin_vuelo_service.detalle(vuelo_id))
+
+
+@app.route("/api/admin/vuelos", methods=["POST"])
+def crear_vuelo():
+    datos = request.get_json(silent=True) or {}
+    return _admin_vuelos(lambda: admin_vuelo_service.crear(datos), 201)
+
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>", methods=["PUT"])
+def admin_editar_vuelo(vuelo_id):
+    datos = request.get_json(silent=True) or {}
+    return _admin_vuelos(lambda: admin_vuelo_service.actualizar(vuelo_id, datos))
+
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>/cancelar", methods=["PUT"])
+def admin_cancelar_vuelo(vuelo_id):
+    return _admin_vuelos(lambda: admin_vuelo_service.cancelar(vuelo_id))
+
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>/reactivar", methods=["PUT"])
+def admin_reactivar_vuelo(vuelo_id):
+    return _admin_vuelos(lambda: admin_vuelo_service.reactivar(vuelo_id))
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

@@ -15,10 +15,6 @@ class BarraSuperior extends StatelessWidget {
   final VoidCallback? onPerfil;
   final VoidCallback onCerrarSesion;
 
-  /// Solo se pasa cuando el usuario es administrador (temporal, hasta
-  /// que diseñemos la vista del administrador).
-  final VoidCallback? onCrearVuelo;
-
   /// Muestra el ícono del carrito (se oculta dentro del propio carrito).
   final bool mostrarCarrito;
 
@@ -29,7 +25,6 @@ class BarraSuperior extends StatelessWidget {
     this.onVuelos,
     this.onReservas,
     this.onPerfil,
-    this.onCrearVuelo,
     this.mostrarCarrito = true,
   });
 
@@ -69,13 +64,6 @@ class BarraSuperior extends StatelessWidget {
                           activo: actual == SeccionApp.reservas,
                           onTap: onReservas,
                         ),
-                        if (onCrearVuelo != null) ...[
-                          const SizedBox(width: 20),
-                          _EnlaceNav(
-                              texto: 'Crear vuelo',
-                              activo: false,
-                              onTap: onCrearVuelo),
-                        ],
                         const Spacer(),
                         if (mostrarCarrito) ...[
                           const _BotonCarrito(),

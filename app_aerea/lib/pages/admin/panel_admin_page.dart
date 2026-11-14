@@ -26,7 +26,18 @@ class PanelAdminPage extends StatefulWidget {
   /// Para que los enlaces del panel abran otra sección del menú.
   final ValueChanged<SeccionAdmin> onIrA;
 
-  const PanelAdminPage({super.key, required this.onIrA});
+  /// Abre el formulario de nuevo vuelo.
+  final VoidCallback onNuevoVuelo;
+
+  /// Abre el detalle de un vuelo (filas de "Próximas salidas").
+  final ValueChanged<int> onVerVuelo;
+
+  const PanelAdminPage({
+    super.key,
+    required this.onIrA,
+    required this.onNuevoVuelo,
+    required this.onVerVuelo,
+  });
 
   @override
   State<PanelAdminPage> createState() => _PanelAdminPageState();
@@ -69,6 +80,8 @@ class _PanelAdminPageState extends State<PanelAdminPage> {
           child: _Contenido(
             panel: snap.data!,
             onIrA: widget.onIrA,
+            onNuevoVuelo: widget.onNuevoVuelo,
+            onVerVuelo: widget.onVerVuelo,
             onRecargar: _recargar,
           ),
         );
@@ -80,11 +93,15 @@ class _PanelAdminPageState extends State<PanelAdminPage> {
 class _Contenido extends StatelessWidget {
   final PanelAdmin panel;
   final ValueChanged<SeccionAdmin> onIrA;
+  final VoidCallback onNuevoVuelo;
+  final ValueChanged<int> onVerVuelo;
   final VoidCallback onRecargar;
 
   const _Contenido({
     required this.panel,
     required this.onIrA,
+    required this.onNuevoVuelo,
+    required this.onVerVuelo,
     required this.onRecargar,
   });
 
@@ -150,7 +167,7 @@ class _Contenido extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           FilledButton.icon(
-                            onPressed: () => onIrA(SeccionAdmin.vuelos),
+                            onPressed: onNuevoVuelo,
                             icon: const Icon(Icons.add_rounded, size: 20),
                             label: const Text('Nuevo vuelo'),
                             style: FilledButton.styleFrom(
@@ -181,6 +198,7 @@ class _Contenido extends StatelessWidget {
                   _ProximasSalidas(
                     salidas: panel.proximasSalidas,
                     onVerTodos: () => onIrA(SeccionAdmin.vuelos),
+                    onVerVuelo: onVerVuelo,
                   ),
                 ],
               ),
@@ -657,8 +675,13 @@ class _UltimasReservas extends StatelessWidget {
 class _ProximasSalidas extends StatelessWidget {
   final List<SalidaProxima> salidas;
   final VoidCallback onVerTodos;
+  final ValueChanged<int> onVerVuelo;
 
-  const _ProximasSalidas({required this.salidas, required this.onVerTodos});
+  const _ProximasSalidas({
+    required this.salidas,
+    required this.onVerTodos,
+    required this.onVerVuelo,
+  });
 
   static String _cuando(SalidaProxima s) {
     final hoy = Formato.soloFecha(DateTime.now());
@@ -720,6 +743,7 @@ class _ProximasSalidas extends StatelessWidget {
                         ),
                         for (final s in salidas)
                           _FilaTabla(
+                            onTap: () => onVerVuelo(s.id),
                             celdas: [
                               Text('#${s.id}',
                                   style: const TextStyle(
@@ -776,14 +800,15 @@ class _ProximasSalidas extends StatelessWidget {
 class _FilaTabla extends StatelessWidget {
   final List<Widget> celdas;
   final bool cabecera;
+  final VoidCallback? onTap;
 
-  const _FilaTabla({required this.celdas, this.cabecera = false});
+  const _FilaTabla({required this.celdas, this.cabecera = false, this.onTap});
 
   static const _flex = [1, 3, 2, 3, 2];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final fila = Container(
       padding: EdgeInsets.symmetric(vertical: cabecera ? 8 : 12),
       decoration: BoxDecoration(
         color: cabecera ? _fondoCabecera : null,
@@ -812,6 +837,8 @@ class _FilaTabla extends StatelessWidget {
         ),
       ),
     );
+    if (onTap == null) return fila;
+    return InkWell(onTap: onTap, child: fila);
   }
 }
 
