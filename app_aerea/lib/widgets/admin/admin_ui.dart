@@ -464,3 +464,47 @@ class ErrorAdmin extends StatelessWidget {
 /// Mensaje de error legible a partir de una excepción.
 String mensajeError(Object e) =>
     e.toString().replaceFirst('Exception: ', '');
+
+/// Lista desplegable con el estilo de los filtros ("Rol: Todos", "Vuelo: …").
+class SelectorAdmin<T> extends StatelessWidget {
+  final T valor;
+  final Map<T, String> opciones;
+  final ValueChanged<T?> onChanged;
+
+  const SelectorAdmin({
+    super.key,
+    required this.valor,
+    required this.opciones,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: valor,
+          isExpanded: true,
+          icon: const Icon(Icons.expand_more_rounded),
+          style: const TextStyle(fontSize: 14, color: AppColors.primary),
+          items: [
+            for (final e in opciones.entries)
+              DropdownMenuItem<T>(
+                value: e.key,
+                child: Text(e.value,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}

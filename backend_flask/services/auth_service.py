@@ -39,17 +39,21 @@ class AuthService:
             password_hash = Seguridad.generar_hash(password)
 
             cursor.execute("""
-                SELECT id, usuario, nombre_completo, correo, rol, correo_verificado
+                SELECT id, usuario, nombre_completo, correo, rol, correo_verificado,
+                       COALESCE(estado, TRUE) AS activo
                 FROM usuarios
                 WHERE LOWER(usuario) = LOWER(%s)
                   AND password_hash = %s
-                  AND estado = TRUE
             """, (usuario, password_hash))
 
             fila = cursor.fetchone()
 
             if fila is None:
                 return None
+
+            # Suspendida por el administrador (solo se avisa si la clave es correcta)
+            if not fila["activo"]:
+                return {"cuenta_suspendida": True}
 
             # Segunda barrera: con el registro nuevo no deberían existir
             # cuentas sin verificar, pero se mantiene el control.

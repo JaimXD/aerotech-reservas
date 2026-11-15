@@ -298,7 +298,7 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
       ),
     );
 
-    final periodo = _Selector<PeriodoReservas>(
+    final periodo = SelectorAdmin<PeriodoReservas>(
       valor: _periodo,
       opciones: {
         for (final p in PeriodoReservas.values)
@@ -308,7 +308,7 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
     );
 
     final vuelos = d?.vuelos ?? const <VueloFiltro>[];
-    final vuelo = _Selector<int?>(
+    final vuelo = SelectorAdmin<int?>(
       valor: vuelos.any((v) => v.id == _vuelo) ? _vuelo : null,
       opciones: {
         null: 'Vuelo: Todos',
@@ -526,49 +526,6 @@ class _Pestana extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Lista desplegable con el estilo de los filtros.
-class _Selector<T> extends StatelessWidget {
-  final T valor;
-  final Map<T, String> opciones;
-  final ValueChanged<T?> onChanged;
-
-  const _Selector({
-    required this.valor,
-    required this.opciones,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: valor,
-          isExpanded: true,
-          icon: const Icon(Icons.expand_more_rounded),
-          style: const TextStyle(fontSize: 14, color: AppColors.primary),
-          items: [
-            for (final e in opciones.entries)
-              DropdownMenuItem<T>(
-                value: e.key,
-                child: Text(e.value,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: onChanged,
         ),
       ),
     );

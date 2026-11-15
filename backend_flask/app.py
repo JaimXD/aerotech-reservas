@@ -12,6 +12,7 @@ from services.factura_service import FacturaService, ErrorFactura
 from services.carrito_service import CarritoService, ErrorCarrito
 from services.admin_service import AdminService
 from services.admin_reserva_service import AdminReservaService, ErrorReserva
+from services.admin_usuario_service import AdminUsuarioService, ErrorUsuario
 
 
 app = Flask(__name__)
@@ -26,6 +27,7 @@ factura_service = FacturaService()
 carrito_service = CarritoService()
 admin_service = AdminService()
 admin_reserva_service = AdminReservaService()
+admin_usuario_service = AdminUsuarioService()
 
 def obtener_usuario_desde_token():
     try:
@@ -125,6 +127,11 @@ def login():
 
         if resultado is None:
             return jsonify({"error": "Credenciales inválidas"}), 401
+        if resultado.get("cuenta_suspendida"):
+            return jsonify({
+                "error": "Tu cuenta está suspendida. Comunícate con AeroTech para reactivarla.",
+                "codigo": "CUENTA_SUSPENDIDA"
+            }), 403
         if resultado.get("correo_pendiente"):
             return jsonify({
                 "error": "Debes verificar tu correo antes de iniciar sesión",
@@ -594,6 +601,47 @@ def admin_factura_reserva(reserva_id):
     except Exception:
         app.logger.exception("Error generando factura (admin)")
         return jsonify({"error": "No se pudo generar la factura"}), 500
+
+
+# ───────────────────────── Administración de usuarios ─────────────────────────
+
+def _admin_usuarios(accion):
+    """Valida que sea admin, ejecuta la acción con su id y traduce los errores a JSON."""
+    admin, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        return jsonify(accion(admin["id"])), 200
+    except ErrorUsuario as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error en la administración de usuarios")
+        return jsonify({"error": "Ocurrió un error inesperado. Intenta de nuevo."}), 500
+
+
+@app.route("/api/admin/usuarios", methods=["GET"])
+def admin_listar_usuarios():
+    return _admin_usuarios(lambda yo: admin_usuario_service.listar(
+        yo,
+        q=request.args.get("q"),
+        rol=request.args.get("rol"),
+        estado=request.args.get("estado"),
+        pagina=request.args.get("pagina", 1, type=int),
+    ))
+
+
+@app.route("/api/admin/usuarios/<int:usuario_id>/rol", methods=["PUT"])
+def admin_cambiar_rol(usuario_id):
+    datos = request.get_json(silent=True) or {}
+    return _admin_usuarios(lambda yo: admin_usuario_service.cambiar_rol(
+        yo, usuario_id, datos.get("rol")))
+
+
+@app.route("/api/admin/usuarios/<int:usuario_id>/estado", methods=["PUT"])
+def admin_cambiar_estado_usuario(usuario_id):
+    datos = request.get_json(silent=True) or {}
+    return _admin_usuarios(lambda yo: admin_usuario_service.cambiar_estado(
+        yo, usuario_id, datos.get("activo")))
 
 
 if __name__ == "__main__":

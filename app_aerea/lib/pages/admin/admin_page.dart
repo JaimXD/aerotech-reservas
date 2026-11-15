@@ -6,6 +6,7 @@ import '../../widgets/admin/menu_lateral_admin.dart';
 import '../login_page.dart';
 import 'panel_admin_page.dart';
 import 'reservas_admin_page.dart';
+import 'usuarios_admin_page.dart';
 import 'vuelos_admin_page.dart';
 
 /// Estructura del administrador: menú lateral + la sección elegida.
@@ -68,8 +69,7 @@ class _AdminPageState extends State<AdminPage> {
           onVerVuelo: (id) => _ir(SeccionAdmin.vuelos, vuelo: id),
         );
       case SeccionAdmin.usuarios:
-        // Se reemplazan en las siguientes secciones.
-        return _EnConstruccion(seccion: _seccion);
+        return UsuariosAdminPage(key: ValueKey('usuarios-$_visita'));
     }
   }
 
@@ -120,42 +120,6 @@ class _AdminPageState extends State<AdminPage> {
           body: _contenido(),
         );
       },
-    );
-  }
-}
-
-/// Marcador temporal para las secciones que aún no se implementan.
-class _EnConstruccion extends StatelessWidget {
-  final SeccionAdmin seccion;
-
-  const _EnConstruccion({required this.seccion});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(seccion.icono, size: 44, color: AppColors.secondary),
-            const SizedBox(height: 14),
-            Text(
-              seccion.titulo,
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Esta sección se agregará en el siguiente paso.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
