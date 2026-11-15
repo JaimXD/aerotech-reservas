@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../config/app_theme.dart';
 import '../../models/vuelo_admin.dart';
+import '../../services/admin_reserva_service.dart';
 import '../../services/admin_vuelo_service.dart';
 import '../../utils/descarga.dart';
 import '../../utils/formato.dart';
@@ -11,6 +12,7 @@ import '../../widgets/admin/admin_ui.dart';
 import '../../widgets/admin/dialogo_cancelar_vuelo.dart';
 import '../../widgets/admin/mapa_avion_admin.dart';
 import '../../widgets/custom_toast.dart';
+import '../../widgets/dialogo_factura.dart';
 import 'vuelo_form_page.dart';
 
 /// Detalle de un vuelo: ocupación, mapa de asientos y pasajeros.
@@ -324,6 +326,10 @@ class _VueloDetallePageState extends State<VueloDetallePage> {
                           ? null
                           : p.codigo),
                   onDescargar: d.pasajeros.isEmpty ? null : _descargarLista,
+                  onFactura: (p) => mostrarFacturaAdmin(context,
+                      codigo: p.codigo,
+                      cargar: () =>
+                          AdminReservaService().facturaXml(p.reservaId)),
                 );
                 if (c.maxWidth < 1000) {
                   return Column(
@@ -405,12 +411,14 @@ class _TarjetaPasajeros extends StatelessWidget {
   final String? codigoResaltado;
   final ValueChanged<PasajeroVuelo> onTap;
   final VoidCallback? onDescargar;
+  final ValueChanged<PasajeroVuelo> onFactura;
 
   const _TarjetaPasajeros({
     required this.pasajeros,
     required this.codigoResaltado,
     required this.onTap,
     required this.onDescargar,
+    required this.onFactura,
   });
 
   @override
@@ -462,6 +470,7 @@ class _TarjetaPasajeros extends StatelessWidget {
                       ancho: ancho,
                       resaltado: p.codigo == codigoResaltado,
                       onTap: () => onTap(p),
+                      onFactura: p.activa ? () => onFactura(p) : null,
                     ),
                 ],
               );
@@ -492,6 +501,7 @@ class _CabeceraPasajeros extends StatelessWidget {
           SizedBox(
               width: 90,
               child: Text('TOTAL', style: estilo, textAlign: TextAlign.right)),
+          SizedBox(width: 48),
         ],
       ),
     );
@@ -503,12 +513,14 @@ class _FilaPasajero extends StatelessWidget {
   final bool ancho;
   final bool resaltado;
   final VoidCallback onTap;
+  final VoidCallback? onFactura;
 
   const _FilaPasajero({
     required this.pasajero,
     required this.ancho,
     required this.resaltado,
     required this.onTap,
+    required this.onFactura,
   });
 
   @override
@@ -565,6 +577,17 @@ class _FilaPasajero extends StatelessWidget {
             fontWeight: FontWeight.w700,
             color: colorTexto,
             decoration: tenue ? TextDecoration.lineThrough : null));
+    final factura = SizedBox(
+      width: 48,
+      child: IconButton(
+        tooltip: onFactura == null
+            ? 'Las reservas canceladas no tienen factura'
+            : 'Factura XML',
+        onPressed: onFactura,
+        icon: const Icon(Icons.receipt_long_outlined, size: 20),
+        color: AppColors.secondary,
+      ),
+    );
 
     return Material(
       color: resaltado ? AppColors.successLight : Colors.transparent,
@@ -584,6 +607,7 @@ class _FilaPasajero extends StatelessWidget {
                     Expanded(flex: 3, child: asientos),
                     Expanded(flex: 4, child: codigo),
                     SizedBox(width: 90, child: total),
+                    factura,
                   ],
                 )
               : Column(
@@ -602,6 +626,7 @@ class _FilaPasajero extends StatelessWidget {
                       asientos,
                       const SizedBox(width: 12),
                       Expanded(child: codigo),
+                      factura,
                     ]),
                   ],
                 ),

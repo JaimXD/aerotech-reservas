@@ -34,6 +34,26 @@ class FacturaService:
         nombre = f"factura_{datos['codigo_reserva']}.xml"
         return xml, nombre
 
+    def generar_factura_admin(self, reserva_id):
+        """Factura de cualquier reserva, a nombre de su dueño (uso del administrador)."""
+        conexion = Database.obtener_conexion()
+        cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            cursor.execute("""
+                SELECT u.id, u.usuario, u.nombre_completo, u.correo
+                FROM reservas r
+                INNER JOIN usuarios u ON u.id = r.usuario_id
+                WHERE r.id = %s
+            """, (reserva_id,))
+            dueno = cursor.fetchone()
+        finally:
+            cursor.close()
+            conexion.close()
+
+        if dueno is None:
+            raise ErrorFactura("Reserva no encontrada", 404)
+        return self.generar_factura_xml(dueno, reserva_id)
+
     # ─────────────────────────── Datos ───────────────────────────
 
     def _obtener_reserva(self, usuario_id, reserva_id):

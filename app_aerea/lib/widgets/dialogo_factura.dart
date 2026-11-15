@@ -11,10 +11,23 @@ const _fondoSuave = Color(0xFFF7F2EC);
 
 /// Muestra la factura de una reserva como un recibo y permite descargar el XML.
 Future<void> mostrarFactura(BuildContext context, Reserva r) {
+  return _mostrar(context, r.codigoReserva,
+      () => FacturaService().obtenerFacturaXml(r.id));
+}
+
+/// Igual que [mostrarFactura], pero para el administrador: [cargar] pide el
+/// XML de cualquier reserva (GET /api/admin/reservas/<id>/factura).
+Future<void> mostrarFacturaAdmin(BuildContext context,
+    {required String codigo, required Future<String> Function() cargar}) {
+  return _mostrar(context, codigo, cargar);
+}
+
+Future<void> _mostrar(
+    BuildContext context, String codigo, Future<String> Function() cargar) {
   return showDialog<void>(
     context: context,
     barrierColor: AppColors.primary.withValues(alpha: 0.45),
-    builder: (_) => _DialogoFactura(reserva: r),
+    builder: (_) => _DialogoFactura(codigo: codigo, cargar: cargar),
   );
 }
 
@@ -91,9 +104,10 @@ class _Factura {
 // ════════════════════════════════════════════════════════════════
 
 class _DialogoFactura extends StatefulWidget {
-  final Reserva reserva;
+  final String codigo;
+  final Future<String> Function() cargar;
 
-  const _DialogoFactura({required this.reserva});
+  const _DialogoFactura({required this.codigo, required this.cargar});
 
   @override
   State<_DialogoFactura> createState() => _DialogoFacturaState();
@@ -105,12 +119,12 @@ class _DialogoFacturaState extends State<_DialogoFactura> {
   @override
   void initState() {
     super.initState();
-    _xml = FacturaService().obtenerFacturaXml(widget.reserva.id);
+    _xml = widget.cargar();
   }
 
   void _descargar(_Factura f) {
     final nombre =
-        'factura_${f.numero.isEmpty ? widget.reserva.codigoReserva : f.numero}.xml';
+        'factura_${f.numero.isEmpty ? widget.codigo : f.numero}.xml';
     try {
       descargarArchivo(nombre, f.xml);
       CustomToast.showSuccess(context, 'Factura descargada: $nombre');

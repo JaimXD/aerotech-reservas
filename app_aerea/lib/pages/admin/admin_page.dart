@@ -5,6 +5,7 @@ import '../../services/session_manager.dart';
 import '../../widgets/admin/menu_lateral_admin.dart';
 import '../login_page.dart';
 import 'panel_admin_page.dart';
+import 'reservas_admin_page.dart';
 import 'vuelos_admin_page.dart';
 
 /// Estructura del administrador: menú lateral + la sección elegida.
@@ -62,6 +63,10 @@ class _AdminPageState extends State<AdminPage> {
           vueloInicial: _vueloInicial,
         );
       case SeccionAdmin.reservas:
+        return ReservasAdminPage(
+          key: ValueKey('reservas-$_visita'),
+          onVerVuelo: (id) => _ir(SeccionAdmin.vuelos, vuelo: id),
+        );
       case SeccionAdmin.usuarios:
         // Se reemplazan en las siguientes secciones.
         return _EnConstruccion(seccion: _seccion);

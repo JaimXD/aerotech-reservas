@@ -11,6 +11,7 @@ from services.admin_vuelo_service import AdminVueloService, ErrorVuelo
 from services.factura_service import FacturaService, ErrorFactura
 from services.carrito_service import CarritoService, ErrorCarrito
 from services.admin_service import AdminService
+from services.admin_reserva_service import AdminReservaService, ErrorReserva
 
 
 app = Flask(__name__)
@@ -24,6 +25,7 @@ admin_vuelo_service = AdminVueloService()
 factura_service = FacturaService()
 carrito_service = CarritoService()
 admin_service = AdminService()
+admin_reserva_service = AdminReservaService()
 
 def obtener_usuario_desde_token():
     try:
@@ -540,6 +542,58 @@ def admin_cancelar_vuelo(vuelo_id):
 @app.route("/api/admin/vuelos/<int:vuelo_id>/reactivar", methods=["PUT"])
 def admin_reactivar_vuelo(vuelo_id):
     return _admin_vuelos(lambda: admin_vuelo_service.reactivar(vuelo_id))
+
+
+# ───────────────────────── Administración de reservas ─────────────────────────
+
+def _admin_reservas(accion):
+    """Valida que sea admin, ejecuta la acción y traduce los errores a JSON."""
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        return jsonify(accion()), 200
+    except ErrorReserva as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error en la administración de reservas")
+        return jsonify({"error": "Ocurrió un error inesperado. Intenta de nuevo."}), 500
+
+
+@app.route("/api/admin/reservas", methods=["GET"])
+def admin_listar_reservas():
+    return _admin_reservas(lambda: admin_reserva_service.listar(
+        estado=request.args.get("estado"),
+        q=request.args.get("q"),
+        periodo=request.args.get("periodo", "todo"),
+        vuelo_id=request.args.get("vuelo", type=int),
+        pagina=request.args.get("pagina", 1, type=int),
+        exportar=request.args.get("exportar") == "1",
+    ))
+
+
+@app.route("/api/admin/reservas/<int:reserva_id>/cancelar", methods=["PUT"])
+def admin_cancelar_reserva(reserva_id):
+    return _admin_reservas(lambda: admin_reserva_service.cancelar(reserva_id))
+
+
+@app.route("/api/admin/reservas/<int:reserva_id>/factura", methods=["GET"])
+def admin_factura_reserva(reserva_id):
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        xml, nombre = factura_service.generar_factura_admin(reserva_id)
+        return Response(
+            xml,
+            mimetype="application/xml",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    except ErrorFactura as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error generando factura (admin)")
+        return jsonify({"error": "No se pudo generar la factura"}), 500
 
 
 if __name__ == "__main__":
