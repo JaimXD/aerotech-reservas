@@ -28,6 +28,50 @@ class AdminService:
             cursor.close()
             conexion.close()
 
+    # ───────────────────────── Cambios ─────────────────────────
+
+    def obtener_cambios(self):
+        """Huella de cada grupo de datos para que la app se actualice sola.
+
+        La app la consulta cada pocos segundos y solo recarga una sección
+        cuando cambia la huella de algo que esa sección muestra.
+        """
+        conexion = Database.obtener_conexion()
+        cursor = conexion.cursor()
+        try:
+            cursor.execute(f"""
+                SELECT
+                    -- Cualquier cambio en un vuelo, y los que van saliendo con la hora
+                    (SELECT md5(COALESCE(string_agg(v::text, '|' ORDER BY v.id), ''))
+                            || ':' || COUNT(*) FILTER (
+                                WHERE (v.fecha + v.hora_salida) <= (NOW() AT TIME ZONE '{self.ZONA}'))
+                     FROM vuelos v),
+                    -- Las reservas solo se crean o se cancelan
+                    (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) || ':'
+                            || COUNT(*) FILTER (WHERE estado = 'CANCELADA')
+                     FROM reservas),
+                    (SELECT md5(COALESCE(string_agg(
+                                concat_ws(',', id, usuario, nombre_completo, correo,
+                                          rol, estado, correo_verificado),
+                                '|' ORDER BY id), ''))
+                     FROM usuarios),
+                    -- Asientos apartados ahora mismo (cambia también cuando vencen)
+                    (SELECT md5(COALESCE(string_agg(
+                                concat_ws(',', id, bloqueado_por, bloqueado_hasta),
+                                '|' ORDER BY id), ''))
+                     FROM asientos_vuelo WHERE bloqueado_hasta > NOW())
+            """)
+            vuelos, reservas, usuarios, carritos = cursor.fetchone()
+            return {
+                "vuelos": vuelos,
+                "reservas": reservas,
+                "usuarios": usuarios,
+                "carritos": carritos,
+            }
+        finally:
+            cursor.close()
+            conexion.close()
+
     # ───────────────────────── Ayudantes ─────────────────────────
 
     def _con_iva(self, valor):

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../models/panel_admin.dart';
 import '../../services/admin_service.dart';
+import '../../services/cambios_admin.dart';
 import '../../services/session_manager.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/menu_lateral_admin.dart';
@@ -45,47 +46,62 @@ class PanelAdminPage extends StatefulWidget {
 
 class _PanelAdminPageState extends State<PanelAdminPage> {
   final AdminService _service = AdminService();
-  late Future<PanelAdmin> _datos;
+
+  PanelAdmin? _panel;
+  String? _error;
+  int _consulta = 0; // descarta respuestas viejas si llegan tarde
+
+  /// El panel resume todo: se recarga solo con cualquier cambio.
+  late final VoidCallback _dejarDeEscuchar;
 
   @override
   void initState() {
     super.initState();
-    _datos = _service.obtenerPanel();
+    _cargar();
+    _dejarDeEscuchar = CambiosAdmin.instancia.escuchar(
+      DatoAdmin.values.toSet(),
+      () => _cargar(silencioso: true),
+    );
   }
 
-  Future<void> _recargar() async {
-    final nuevo = _service.obtenerPanel();
-    setState(() => _datos = nuevo);
-    await nuevo.catchError((_) => PanelAdmin.fromJson(const {}));
+  @override
+  void dispose() {
+    _dejarDeEscuchar();
+    super.dispose();
+  }
+
+  /// [silencioso]: recarga automática; conserva lo que se ve y no muestra errores.
+  Future<void> _cargar({bool silencioso = false}) async {
+    final consulta = ++_consulta;
+    if (!silencioso && _error != null) setState(() => _error = null);
+    try {
+      final panel = await _service.obtenerPanel();
+      if (!mounted || consulta != _consulta) return;
+      setState(() {
+        _panel = panel;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted || consulta != _consulta || silencioso) return;
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<PanelAdmin>(
-      future: _datos,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Center(
-              child: CircularProgressIndicator(color: AppColors.secondary));
-        }
-        if (snap.hasError) {
-          return _Error(
-            mensaje: snap.error.toString().replaceFirst('Exception: ', ''),
-            onReintentar: _recargar,
-          );
-        }
-        return RefreshIndicator(
-          color: AppColors.secondary,
-          onRefresh: _recargar,
-          child: _Contenido(
-            panel: snap.data!,
-            onIrA: widget.onIrA,
-            onNuevoVuelo: widget.onNuevoVuelo,
-            onVerVuelo: widget.onVerVuelo,
-            onRecargar: _recargar,
-          ),
-        );
-      },
+    final panel = _panel;
+    if (panel == null) {
+      if (_error != null) {
+        return _Error(mensaje: _error!, onReintentar: _cargar);
+      }
+      return const Center(
+          child: CircularProgressIndicator(color: AppColors.secondary));
+    }
+    return _Contenido(
+      panel: panel,
+      onIrA: widget.onIrA,
+      onNuevoVuelo: widget.onNuevoVuelo,
+      onVerVuelo: widget.onVerVuelo,
     );
   }
 }
@@ -95,14 +111,12 @@ class _Contenido extends StatelessWidget {
   final ValueChanged<SeccionAdmin> onIrA;
   final VoidCallback onNuevoVuelo;
   final ValueChanged<int> onVerVuelo;
-  final VoidCallback onRecargar;
 
   const _Contenido({
     required this.panel,
     required this.onIrA,
     required this.onNuevoVuelo,
     required this.onVerVuelo,
-    required this.onRecargar,
   });
 
   String _saludo() {
@@ -156,30 +170,18 @@ class _Contenido extends StatelessWidget {
                                   color: AppColors.primary)),
                         ],
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Actualizar',
-                            onPressed: onRecargar,
-                            icon: const Icon(Icons.refresh_rounded),
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: 6),
-                          FilledButton.icon(
-                            onPressed: onNuevoVuelo,
-                            icon: const Icon(Icons.add_rounded, size: 20),
-                            label: const Text('Nuevo vuelo'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              minimumSize: const Size(0, 44),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              textStyle: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ],
+                      FilledButton.icon(
+                        onPressed: onNuevoVuelo,
+                        icon: const Icon(Icons.add_rounded, size: 20),
+                        label: const Text('Nuevo vuelo'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          minimumSize: const Size(0, 44),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          textStyle: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ],
                   ),

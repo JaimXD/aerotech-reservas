@@ -499,6 +499,19 @@ def panel_admin():
         return jsonify({"error": "No se pudo cargar el panel"}), 500
 
 
+@app.route("/api/admin/cambios", methods=["GET"])
+def cambios_admin():
+    """Huella de los datos; la app la consulta cada 5 s para actualizarse sola."""
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        return jsonify(admin_service.obtener_cambios()), 200
+    except Exception:
+        app.logger.exception("Error obteniendo los cambios del administrador")
+        return jsonify({"error": "No se pudieron revisar los cambios"}), 500
+
+
 # ───────────────────────── Administración de vuelos ─────────────────────────
 
 def _admin_vuelos(accion, codigo_exito=200):

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../models/reserva_admin.dart';
 import '../../services/admin_reserva_service.dart';
+import '../../services/cambios_admin.dart';
 import '../../utils/descarga.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
@@ -38,25 +39,36 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
   String? _error;
   int _consulta = 0; // descarta respuestas viejas si llegan tarde
 
+  /// Recarga sola cuando cambian los datos en el servidor.
+  late final VoidCallback _dejarDeEscuchar;
+
   @override
   void initState() {
     super.initState();
     _cargar();
+    _dejarDeEscuchar = CambiosAdmin.instancia.escuchar(
+      {DatoAdmin.reservas, DatoAdmin.vuelos, DatoAdmin.usuarios},
+      () => _cargar(silencioso: true),
+    );
   }
 
   @override
   void dispose() {
+    _dejarDeEscuchar();
     _espera?.cancel();
     _busqueda.dispose();
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  /// [silencioso]: recarga automática, sin indicador de carga ni errores.
+  Future<void> _cargar({bool silencioso = false}) async {
     final consulta = ++_consulta;
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = null;
+      });
+    }
     try {
       final datos = await _service.listar(
         estado: _estado,
@@ -68,18 +80,19 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
       if (!mounted || consulta != _consulta) return;
       if (datos.reservas.isEmpty && _pagina > 1) {
         _pagina = datos.paginas;
-        await _cargar();
+        await _cargar(silencioso: silencioso);
         return;
       }
       setState(() {
         _datos = datos;
         _cargando = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted || consulta != _consulta) return;
       setState(() {
         _cargando = false;
-        _error = mensajeError(e);
+        if (!silencioso) _error = mensajeError(e);
       });
     }
   }
@@ -189,57 +202,47 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
     final d = _datos;
     return Stack(
       children: [
-        RefreshIndicator(
-          color: AppColors.secondary,
-          onRefresh: _cargar,
-          child: PaginaAdmin(
-            children: [
-              EncabezadoAdmin(
-                titulo: 'Reservas',
-                subtitulo: Text(d == null
-                    ? 'Todas las compras hechas por los clientes'
-                    : 'Todas las compras hechas por los clientes · '
-                        '${dineroAdmin(d.vendido)} en reservas activas'),
-                acciones: [
-                  IconButton(
-                    tooltip: 'Actualizar',
-                    onPressed: _cargando ? null : _cargar,
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: AppColors.textSecondary,
-                  ),
-                  BotonSecundarioAdmin(
-                    texto: _exportando ? 'Exportando…' : 'Exportar',
-                    icono: Icons.download_rounded,
-                    onPressed: d == null || d.total == 0 || _exportando
-                        ? null
-                        : _exportar,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _pestanas(d),
-              const SizedBox(height: 14),
-              _filtros(d),
-              const SizedBox(height: 14),
-              if (d == null && _error != null)
-                ErrorAdmin(mensaje: _error!, onReintentar: _cargar)
-              else if (d == null)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 80),
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.secondary)),
-                )
-              else ...[
-                if (_error != null) ...[
-                  Text(_error!,
-                      style: const TextStyle(color: AppColors.error)),
-                  const SizedBox(height: 10),
-                ],
-                _tabla(d),
+        PaginaAdmin(
+          children: [
+            EncabezadoAdmin(
+              titulo: 'Reservas',
+              subtitulo: Text(d == null
+                  ? 'Todas las compras hechas por los clientes'
+                  : 'Todas las compras hechas por los clientes · '
+                      '${dineroAdmin(d.vendido)} en reservas activas'),
+              acciones: [
+                BotonSecundarioAdmin(
+                  texto: _exportando ? 'Exportando…' : 'Exportar',
+                  icono: Icons.download_rounded,
+                  onPressed: d == null || d.total == 0 || _exportando
+                      ? null
+                      : _exportar,
+                ),
               ],
+            ),
+            const SizedBox(height: 20),
+            _pestanas(d),
+            const SizedBox(height: 14),
+            _filtros(d),
+            const SizedBox(height: 14),
+            if (d == null && _error != null)
+              ErrorAdmin(mensaje: _error!, onReintentar: _cargar)
+            else if (d == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 80),
+                child: Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.secondary)),
+              )
+            else ...[
+              if (_error != null) ...[
+                Text(_error!,
+                    style: const TextStyle(color: AppColors.error)),
+                const SizedBox(height: 10),
+              ],
+              _tabla(d),
             ],
-          ),
+          ],
         ),
         if (_cargando && d != null)
           const Positioned(

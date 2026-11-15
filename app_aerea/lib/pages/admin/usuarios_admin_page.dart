@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../models/usuario_admin.dart';
 import '../../services/admin_usuario_service.dart';
+import '../../services/cambios_admin.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
 import '../../widgets/custom_toast.dart';
@@ -37,25 +38,36 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
   /// Cuentas con una acción en curso (sus botones quedan desactivados).
   final Set<int> _ocupados = {};
 
+  /// Recarga sola cuando cambian los datos en el servidor.
+  late final VoidCallback _dejarDeEscuchar;
+
   @override
   void initState() {
     super.initState();
     _cargar();
+    _dejarDeEscuchar = CambiosAdmin.instancia.escuchar(
+      {DatoAdmin.usuarios, DatoAdmin.reservas},
+      () => _cargar(silencioso: true),
+    );
   }
 
   @override
   void dispose() {
+    _dejarDeEscuchar();
     _espera?.cancel();
     _busqueda.dispose();
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  /// [silencioso]: recarga automática, sin indicador de carga ni errores.
+  Future<void> _cargar({bool silencioso = false}) async {
     final consulta = ++_consulta;
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = null;
+      });
+    }
     try {
       final datos = await _service.listar(
         busqueda: _busqueda.text,
@@ -66,18 +78,19 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
       if (!mounted || consulta != _consulta) return;
       if (datos.usuarios.isEmpty && _pagina > 1) {
         _pagina = datos.paginas;
-        await _cargar();
+        await _cargar(silencioso: silencioso);
         return;
       }
       setState(() {
         _datos = datos;
         _cargando = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted || consulta != _consulta) return;
       setState(() {
         _cargando = false;
-        _error = mensajeError(e);
+        if (!silencioso) _error = mensajeError(e);
       });
     }
   }
@@ -151,49 +164,37 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
     final d = _datos;
     return Stack(
       children: [
-        RefreshIndicator(
-          color: AppColors.secondary,
-          onRefresh: _cargar,
-          child: PaginaAdmin(
-            children: [
-              EncabezadoAdmin(
-                titulo: 'Usuarios',
-                subtitulo: Text(d == null
-                    ? 'Cuentas de clientes y administradores'
-                    : _resumen(d)),
-                acciones: [
-                  IconButton(
-                    tooltip: 'Actualizar',
-                    onPressed: _cargando ? null : _cargar,
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: AppColors.textSecondary,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _filtros(),
-              const SizedBox(height: 14),
-              if (d == null && _error != null)
-                ErrorAdmin(mensaje: _error!, onReintentar: _cargar)
-              else if (d == null)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 80),
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.secondary)),
-                )
-              else ...[
-                if (_error != null) ...[
-                  Text(_error!,
-                      style: const TextStyle(color: AppColors.error)),
-                  const SizedBox(height: 10),
-                ],
-                _tabla(d),
-                const SizedBox(height: 14),
-                const _Nota(),
+        PaginaAdmin(
+          children: [
+            EncabezadoAdmin(
+              titulo: 'Usuarios',
+              subtitulo: Text(d == null
+                  ? 'Cuentas de clientes y administradores'
+                  : _resumen(d)),
+            ),
+            const SizedBox(height: 20),
+            _filtros(),
+            const SizedBox(height: 14),
+            if (d == null && _error != null)
+              ErrorAdmin(mensaje: _error!, onReintentar: _cargar)
+            else if (d == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 80),
+                child: Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.secondary)),
+              )
+            else ...[
+              if (_error != null) ...[
+                Text(_error!,
+                    style: const TextStyle(color: AppColors.error)),
+                const SizedBox(height: 10),
               ],
+              _tabla(d),
+              const SizedBox(height: 14),
+              const _Nota(),
             ],
-          ),
+          ],
         ),
         if (_cargando && d != null)
           const Positioned(

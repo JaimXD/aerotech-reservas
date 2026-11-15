@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../config/app_theme.dart';
 import '../../models/vuelo_admin.dart';
 import '../../services/admin_vuelo_service.dart';
+import '../../services/cambios_admin.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
 import '../../widgets/admin/dialogo_cancelar_vuelo.dart';
@@ -60,10 +61,17 @@ class _ListaVuelosState extends State<_ListaVuelos> {
   String? _error;
   int _consulta = 0; // descarta respuestas viejas si llegan tarde
 
+  /// Recarga sola cuando cambian los datos en el servidor.
+  late final VoidCallback _dejarDeEscuchar;
+
   @override
   void initState() {
     super.initState();
     _cargar();
+    _dejarDeEscuchar = CambiosAdmin.instancia.escuchar(
+      {DatoAdmin.vuelos, DatoAdmin.reservas, DatoAdmin.carritos},
+      () => _cargar(silencioso: true),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.abrirNuevo) _nuevo();
       if (widget.vueloInicial != null) _verDetalle(widget.vueloInicial!);
@@ -72,17 +80,21 @@ class _ListaVuelosState extends State<_ListaVuelos> {
 
   @override
   void dispose() {
+    _dejarDeEscuchar();
     _espera?.cancel();
     _busqueda.dispose();
     super.dispose();
   }
 
-  Future<void> _cargar() async {
+  /// [silencioso]: recarga automática, sin indicador de carga ni errores.
+  Future<void> _cargar({bool silencioso = false}) async {
     final consulta = ++_consulta;
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = null;
+      });
+    }
     try {
       final datos = await _service.listar(
         estado: _estado,
@@ -94,18 +106,19 @@ class _ListaVuelosState extends State<_ListaVuelos> {
       // Si la página quedó vacía (p. ej. tras cancelar), vuelve a la última
       if (datos.vuelos.isEmpty && _pagina > 1) {
         _pagina = datos.paginas;
-        await _cargar();
+        await _cargar(silencioso: silencioso);
         return;
       }
       setState(() {
         _datos = datos;
         _cargando = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted || consulta != _consulta) return;
       setState(() {
         _cargando = false;
-        _error = mensajeError(e);
+        if (!silencioso) _error = mensajeError(e);
       });
     }
   }
@@ -220,69 +233,59 @@ class _ListaVuelosState extends State<_ListaVuelos> {
 
     return Stack(
       children: [
-        RefreshIndicator(
-          color: AppColors.secondary,
-          onRefresh: _cargar,
-          child: PaginaAdmin(
-            children: [
-              EncabezadoAdmin(
-                titulo: 'Vuelos',
-                subtitulo: d == null ? null : Text(_resumen(d)),
-                acciones: [
-                  IconButton(
-                    tooltip: 'Actualizar',
-                    onPressed: _cargando ? null : _cargar,
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: AppColors.textSecondary,
-                  ),
-                  BotonAdmin(
-                      texto: 'Nuevo vuelo',
-                      icono: Icons.add_rounded,
-                      onPressed: _nuevo),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _pestanas(d),
-              const SizedBox(height: 14),
-              _filtros(),
-              const SizedBox(height: 14),
-              if (d == null && _error != null)
-                ErrorAdmin(mensaje: _error!, onReintentar: _cargar)
-              else if (d == null)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 80),
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.secondary)),
-                )
-              else ...[
-                if (_error != null) ...[
-                  Text(_error!,
-                      style: const TextStyle(color: AppColors.error)),
-                  const SizedBox(height: 10),
-                ],
-                _tabla(d),
+        PaginaAdmin(
+          children: [
+            EncabezadoAdmin(
+              titulo: 'Vuelos',
+              subtitulo: d == null ? null : Text(_resumen(d)),
+              acciones: [
+                BotonAdmin(
+                    texto: 'Nuevo vuelo',
+                    icono: Icons.add_rounded,
+                    onPressed: _nuevo),
               ],
-              const SizedBox(height: 16),
-              const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline_rounded,
-                      size: 18, color: AppColors.textSecondary),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Un vuelo con reservas no se borra: se cancela, sus '
-                      'pasajeros quedan con la reserva "Cancelada" y el vuelo '
-                      'deja de aparecer en la búsqueda de los clientes.',
-                      style: TextStyle(
-                          fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ),
-                ],
-              ),
+            ),
+            const SizedBox(height: 20),
+            _pestanas(d),
+            const SizedBox(height: 14),
+            _filtros(),
+            const SizedBox(height: 14),
+            if (d == null && _error != null)
+              ErrorAdmin(mensaje: _error!, onReintentar: _cargar)
+            else if (d == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 80),
+                child: Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.secondary)),
+              )
+            else ...[
+              if (_error != null) ...[
+                Text(_error!,
+                    style: const TextStyle(color: AppColors.error)),
+                const SizedBox(height: 10),
+              ],
+              _tabla(d),
             ],
-          ),
+            const SizedBox(height: 16),
+            const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 18, color: AppColors.textSecondary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Un vuelo con reservas no se borra: se cancela, sus '
+                    'pasajeros quedan con la reserva "Cancelada" y el vuelo '
+                    'deja de aparecer en la búsqueda de los clientes.',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
         if (_cargando && d != null)
           const Positioned(

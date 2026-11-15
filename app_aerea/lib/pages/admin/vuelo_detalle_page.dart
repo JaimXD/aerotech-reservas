@@ -6,6 +6,7 @@ import '../../config/app_theme.dart';
 import '../../models/vuelo_admin.dart';
 import '../../services/admin_reserva_service.dart';
 import '../../services/admin_vuelo_service.dart';
+import '../../services/cambios_admin.dart';
 import '../../utils/descarga.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
@@ -45,29 +46,44 @@ class _VueloDetallePageState extends State<VueloDetallePage> {
   DateTime? _vencimiento;
   Timer? _reloj;
 
+  int _consulta = 0; // descarta respuestas viejas si llegan tarde
+
+  /// Recarga sola cuando cambian los datos en el servidor.
+  late final VoidCallback _dejarDeEscuchar;
+
   @override
   void initState() {
     super.initState();
     _cargar();
+    _dejarDeEscuchar = CambiosAdmin.instancia.escuchar(
+      {DatoAdmin.vuelos, DatoAdmin.reservas, DatoAdmin.carritos},
+      () => _cargar(silencioso: true),
+    );
   }
 
   @override
   void dispose() {
+    _dejarDeEscuchar();
     _reloj?.cancel();
     super.dispose();
   }
 
-  Future<void> _cargar() async {
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+  /// [silencioso]: recarga automática, sin indicador de carga ni errores.
+  Future<void> _cargar({bool silencioso = false}) async {
+    final consulta = ++_consulta;
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = null;
+      });
+    }
     try {
       final d = await _service.detalle(widget.vueloId);
-      if (!mounted) return;
+      if (!mounted || consulta != _consulta) return;
       setState(() {
         _detalle = d;
         _cargando = false;
+        _error = null;
         if (_codigoResaltado != null &&
             !d.asientos.any((a) => a.codigo == _codigoResaltado)) {
           _codigoResaltado = null;
@@ -75,10 +91,10 @@ class _VueloDetallePageState extends State<VueloDetallePage> {
       });
       _iniciarReloj(d.primerVencimiento);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || consulta != _consulta) return;
       setState(() {
         _cargando = false;
-        _error = mensajeError(e);
+        if (!silencioso) _error = mensajeError(e);
       });
     }
   }
@@ -94,7 +110,7 @@ class _VueloDetallePageState extends State<VueloDetallePage> {
       if (!mounted) return;
       if (DateTime.now().isAfter(_vencimiento!)) {
         _reloj?.cancel();
-        _cargar();
+        _cargar(silencioso: true);
       } else {
         setState(() {});
       }
@@ -226,128 +242,118 @@ class _VueloDetallePageState extends State<VueloDetallePage> {
 
     return Stack(
       children: [
-        RefreshIndicator(
-          color: AppColors.secondary,
-          onRefresh: _cargar,
-          child: PaginaAdmin(
-            children: [
-              EncabezadoAdmin(
-                migas: [
-                  MigaAdmin('Vuelos', onTap: () => Navigator.pop(context)),
-                  MigaAdmin('#${v.id}'),
-                ],
-                titulo: v.ruta,
-                chip: ChipEstadoVuelo(estado: v.estado),
-                subtitulo: Text(
-                  'Vuelo #${v.id} · ${datos.aerolinea} · '
-                  '${Formato.fechaLarga(datos.salida).toLowerCase()} · '
-                  '${datos.horaSalidaCorta} → ${datos.horaLlegadaCorta} · '
-                  '${dineroAdmin(datos.precio)} por asiento',
-                ),
-                acciones: [
-                  IconButton(
-                    tooltip: 'Actualizar',
-                    onPressed: _cargando ? null : _cargar,
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: AppColors.textSecondary,
-                  ),
-                  if (v.modificable)
-                    BotonSecundarioAdmin(
-                        texto: 'Editar',
-                        icono: Icons.edit_outlined,
-                        onPressed: _editar),
-                  BotonSecundarioAdmin(
-                      texto: 'Duplicar',
-                      icono: Icons.copy_rounded,
-                      onPressed: _duplicar),
-                  if (v.modificable)
-                    BotonSecundarioAdmin(
-                        texto: 'Cancelar vuelo',
-                        peligro: true,
-                        onPressed: _cancelar),
-                  if (v.reactivable)
-                    BotonAdmin(
-                      texto: 'Reactivar',
-                      icono: Icons.replay_rounded,
-                      cargando: _reactivando,
-                      onPressed: _reactivar,
-                    ),
-                ],
-              ),
-              if (v.cancelado) ...[
-                const SizedBox(height: 16),
-                _Aviso(
-                  texto: v.reactivable
-                      ? 'Este vuelo está cancelado y no aparece en la búsqueda. '
-                          'Puedes reactivarlo para volver a venderlo.'
-                      : 'Este vuelo está cancelado.',
-                ),
-              ] else if (v.yaSalio) ...[
-                const SizedBox(height: 16),
-                const _Aviso(
-                    texto:
-                        'Este vuelo ya salió: solo se puede consultar o duplicar.'),
+        PaginaAdmin(
+          children: [
+            EncabezadoAdmin(
+              migas: [
+                MigaAdmin('Vuelos', onTap: () => Navigator.pop(context)),
+                MigaAdmin('#${v.id}'),
               ],
-              const SizedBox(height: 20),
-              FilaIndicadores(children: [
-                IndicadorAdmin(
-                  titulo: 'Vendidos',
-                  valor: '${v.vendidos}',
-                  detalle: 'de ${v.totalAsientos}',
-                  pie: '${(v.ocupacion * 100).round()} % de ocupación',
-                ),
-                IndicadorAdmin(
-                  titulo: 'En carritos',
-                  valor: '${v.enCarritos}',
-                  destacado: v.enCarritos > 0,
-                  pie: v.enCarritos > 0
-                      ? 'el primero se libera en $_cuentaRegresiva'
-                      : 'Nadie lo tiene apartado',
-                ),
-                IndicadorAdmin(
-                  titulo: 'Libres',
-                  valor: '${d.libres}',
-                  pie: d.libres == 0 ? 'Sin asientos a la venta' : null,
-                ),
-                IndicadorAdmin(
-                  titulo: 'Ingresos (con IVA)',
-                  valor: dineroAdmin(v.ingresos),
-                  pie: '${v.reservasActivas} reserva(s) activa(s)',
-                ),
-              ]),
-              const SizedBox(height: 18),
-              LayoutBuilder(builder: (context, c) {
-                final mapa = _tarjetaMapa(d);
-                final pasajeros = _TarjetaPasajeros(
-                  pasajeros: d.pasajeros,
-                  codigoResaltado: _codigoResaltado,
-                  onTap: (p) => setState(() => _codigoResaltado =
-                      _codigoResaltado == p.codigo || !p.activa
-                          ? null
-                          : p.codigo),
-                  onDescargar: d.pasajeros.isEmpty ? null : _descargarLista,
-                  onFactura: (p) => mostrarFacturaAdmin(context,
-                      codigo: p.codigo,
-                      cargar: () =>
-                          AdminReservaService().facturaXml(p.reservaId)),
-                );
-                if (c.maxWidth < 1000) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [mapa, const SizedBox(height: 18), pasajeros],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 5, child: mapa),
-                    const SizedBox(width: 18),
-                    Expanded(flex: 6, child: pasajeros),
-                  ],
-                );
-              }),
+              titulo: v.ruta,
+              chip: ChipEstadoVuelo(estado: v.estado),
+              subtitulo: Text(
+                'Vuelo #${v.id} · ${datos.aerolinea} · '
+                '${Formato.fechaLarga(datos.salida).toLowerCase()} · '
+                '${datos.horaSalidaCorta} → ${datos.horaLlegadaCorta} · '
+                '${dineroAdmin(datos.precio)} por asiento',
+              ),
+              acciones: [
+                if (v.modificable)
+                  BotonSecundarioAdmin(
+                      texto: 'Editar',
+                      icono: Icons.edit_outlined,
+                      onPressed: _editar),
+                BotonSecundarioAdmin(
+                    texto: 'Duplicar',
+                    icono: Icons.copy_rounded,
+                    onPressed: _duplicar),
+                if (v.modificable)
+                  BotonSecundarioAdmin(
+                      texto: 'Cancelar vuelo',
+                      peligro: true,
+                      onPressed: _cancelar),
+                if (v.reactivable)
+                  BotonAdmin(
+                    texto: 'Reactivar',
+                    icono: Icons.replay_rounded,
+                    cargando: _reactivando,
+                    onPressed: _reactivar,
+                  ),
+              ],
+            ),
+            if (v.cancelado) ...[
+              const SizedBox(height: 16),
+              _Aviso(
+                texto: v.reactivable
+                    ? 'Este vuelo está cancelado y no aparece en la búsqueda. '
+                        'Puedes reactivarlo para volver a venderlo.'
+                    : 'Este vuelo está cancelado.',
+              ),
+            ] else if (v.yaSalio) ...[
+              const SizedBox(height: 16),
+              const _Aviso(
+                  texto:
+                      'Este vuelo ya salió: solo se puede consultar o duplicar.'),
             ],
-          ),
+            const SizedBox(height: 20),
+            FilaIndicadores(children: [
+              IndicadorAdmin(
+                titulo: 'Vendidos',
+                valor: '${v.vendidos}',
+                detalle: 'de ${v.totalAsientos}',
+                pie: '${(v.ocupacion * 100).round()} % de ocupación',
+              ),
+              IndicadorAdmin(
+                titulo: 'En carritos',
+                valor: '${v.enCarritos}',
+                destacado: v.enCarritos > 0,
+                pie: v.enCarritos > 0
+                    ? 'el primero se libera en $_cuentaRegresiva'
+                    : 'Nadie lo tiene apartado',
+              ),
+              IndicadorAdmin(
+                titulo: 'Libres',
+                valor: '${d.libres}',
+                pie: d.libres == 0 ? 'Sin asientos a la venta' : null,
+              ),
+              IndicadorAdmin(
+                titulo: 'Ingresos (con IVA)',
+                valor: dineroAdmin(v.ingresos),
+                pie: '${v.reservasActivas} reserva(s) activa(s)',
+              ),
+            ]),
+            const SizedBox(height: 18),
+            LayoutBuilder(builder: (context, c) {
+              final mapa = _tarjetaMapa(d);
+              final pasajeros = _TarjetaPasajeros(
+                pasajeros: d.pasajeros,
+                codigoResaltado: _codigoResaltado,
+                onTap: (p) => setState(() => _codigoResaltado =
+                    _codigoResaltado == p.codigo || !p.activa
+                        ? null
+                        : p.codigo),
+                onDescargar: d.pasajeros.isEmpty ? null : _descargarLista,
+                onFactura: (p) => mostrarFacturaAdmin(context,
+                    codigo: p.codigo,
+                    cargar: () =>
+                        AdminReservaService().facturaXml(p.reservaId)),
+              );
+              if (c.maxWidth < 1000) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [mapa, const SizedBox(height: 18), pasajeros],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 5, child: mapa),
+                  const SizedBox(width: 18),
+                  Expanded(flex: 6, child: pasajeros),
+                ],
+              );
+            }),
+          ],
         ),
         if (_cargando)
           const Positioned(
