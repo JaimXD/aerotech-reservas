@@ -24,14 +24,15 @@ class VuelosAdminPage extends StatelessWidget {
   /// Abre el detalle de este vuelo al entrar (próximas salidas del panel).
   final int? vueloInicial;
 
-  const VuelosAdminPage({super.key, this.abrirNuevo = false, this.vueloInicial});
+  const VuelosAdminPage(
+      {super.key, this.abrirNuevo = false, this.vueloInicial});
 
   @override
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (_) => MaterialPageRoute(
-        builder: (_) => _ListaVuelos(
-            abrirNuevo: abrirNuevo, vueloInicial: vueloInicial),
+        builder: (_) =>
+            _ListaVuelos(abrirNuevo: abrirNuevo, vueloInicial: vueloInicial),
       ),
     );
   }
@@ -213,20 +214,6 @@ class _ListaVuelosState extends State<_ListaVuelos> {
 
   // ── Interfaz ─────────────────────────────────────────────────────
 
-  String _resumen(ListaVuelosAdmin d) {
-    final partes = <String>[
-      '${d.conteo(null)} ${d.conteo(null) == 1 ? 'vuelo' : 'vuelos'}',
-      for (final e in [
-        EstadoVuelo.programado,
-        EstadoVuelo.completo,
-        EstadoVuelo.cancelado
-      ])
-        if (d.conteo(e) > 0)
-          '${d.conteo(e)} ${(d.conteo(e) == 1 ? e.etiqueta : e.plural).toLowerCase()}',
-    ];
-    return partes.join(' · ');
-  }
-
   @override
   Widget build(BuildContext context) {
     final d = _datos;
@@ -237,7 +224,6 @@ class _ListaVuelosState extends State<_ListaVuelos> {
           children: [
             EncabezadoAdmin(
               titulo: 'Vuelos',
-              subtitulo: d == null ? null : Text(_resumen(d)),
               acciones: [
                 BotonAdmin(
                     texto: 'Nuevo vuelo',
@@ -256,13 +242,12 @@ class _ListaVuelosState extends State<_ListaVuelos> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 80),
                 child: Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.secondary)),
+                    child:
+                        CircularProgressIndicator(color: AppColors.secondary)),
               )
             else ...[
               if (_error != null) ...[
-                Text(_error!,
-                    style: const TextStyle(color: AppColors.error)),
+                Text(_error!, style: const TextStyle(color: AppColors.error)),
                 const SizedBox(height: 10),
               ],
               _tabla(d),
@@ -279,8 +264,8 @@ class _ListaVuelosState extends State<_ListaVuelos> {
                     'Un vuelo con reservas no se borra: se cancela, sus '
                     'pasajeros quedan con la reserva "Cancelada" y el vuelo '
                     'deja de aparecer en la búsqueda de los clientes.',
-                    style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary),
+                    style:
+                        TextStyle(fontSize: 13, color: AppColors.textSecondary),
                   ),
                 ),
               ],
@@ -368,8 +353,7 @@ class _ListaVuelosState extends State<_ListaVuelos> {
                 value: null, child: Text('Aerolínea: Todas')),
             for (final a in aerolineas)
               DropdownMenuItem<String?>(
-                  value: a,
-                  child: Text(a, overflow: TextOverflow.ellipsis)),
+                  value: a, child: Text(a, overflow: TextOverflow.ellipsis)),
           ],
           onChanged: (a) => _filtrar(() => _aerolinea = a),
         ),
@@ -566,8 +550,9 @@ class _Pestana extends StatelessWidget {
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color:
-                                activa ? Colors.white : AppColors.textSecondary)),
+                            color: activa
+                                ? Colors.white
+                                : AppColors.textSecondary)),
                   ),
                 ],
               ],
@@ -834,7 +819,8 @@ class _MenuAcciones extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onSelected: onAccion,
       itemBuilder: (_) => [
-        item(_Accion.ver, Icons.event_seat_outlined, 'Ver asientos y pasajeros'),
+        item(
+            _Accion.ver, Icons.event_seat_outlined, 'Ver asientos y pasajeros'),
         if (vuelo.modificable)
           item(_Accion.editar, Icons.edit_outlined, 'Editar'),
         item(_Accion.duplicar, Icons.copy_rounded, 'Duplicar vuelo'),
