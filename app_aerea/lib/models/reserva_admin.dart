@@ -159,9 +159,6 @@ class ListaReservasAdmin {
   final int pagina;
   final int porPagina;
   final Map<String, int> conteos;
-
-  /// Total de las reservas activas con los filtros aplicados (con IVA).
-  final double vendido;
   final List<VueloFiltro> vuelos;
 
   ListaReservasAdmin({
@@ -170,7 +167,6 @@ class ListaReservasAdmin {
     required this.pagina,
     required this.porPagina,
     required this.conteos,
-    required this.vendido,
     required this.vuelos,
   });
 
@@ -184,7 +180,6 @@ class ListaReservasAdmin {
         porPagina: (j['por_pagina'] as num).toInt(),
         conteos: (j['conteos'] as Map<String, dynamic>)
             .map((k, v) => MapEntry(k, (v as num).toInt())),
-        vendido: (j['vendido'] as num).toDouble(),
         vuelos: (j['vuelos'] as List)
             .map((e) => VueloFiltro.fromJson(e as Map<String, dynamic>))
             .toList(),

@@ -158,9 +158,18 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
           '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
       final filas = [
         [
-          'Código', 'Fecha de compra', 'Cliente', 'Usuario', 'Correo',
-          'Vuelo', 'Ruta', 'Salida', 'Asientos', 'Cantidad',
-          'Total con IVA', 'Estado'
+          'Código',
+          'Fecha de compra',
+          'Cliente',
+          'Usuario',
+          'Correo',
+          'Vuelo',
+          'Ruta',
+          'Salida',
+          'Asientos',
+          'Cantidad',
+          'Total con IVA',
+          'Estado'
         ],
         for (final r in todo.reservas)
           [
@@ -179,10 +188,8 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
           ],
       ];
       // BOM + punto y coma: Excel en español lo abre con columnas y tildes.
-      final csv =
-          '﻿${filas.map((f) => f.map(celda).join(';')).join('\r\n')}';
-      descargarArchivo(
-          'reservas_${Formato.iso(DateTime.now())}.csv', csv,
+      final csv = '﻿${filas.map((f) => f.map(celda).join(';')).join('\r\n')}';
+      descargarArchivo('reservas_${Formato.iso(DateTime.now())}.csv', csv,
           tipo: 'text/csv');
       if (mounted) {
         CustomToast.showSuccess(
@@ -206,10 +213,6 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
           children: [
             EncabezadoAdmin(
               titulo: 'Reservas',
-              subtitulo: Text(d == null
-                  ? 'Todas las compras hechas por los clientes'
-                  : 'Todas las compras hechas por los clientes · '
-                      '${dineroAdmin(d.vendido)} en reservas activas'),
               acciones: [
                 BotonSecundarioAdmin(
                   texto: _exportando ? 'Exportando…' : 'Exportar',
@@ -231,13 +234,12 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 80),
                 child: Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.secondary)),
+                    child:
+                        CircularProgressIndicator(color: AppColors.secondary)),
               )
             else ...[
               if (_error != null) ...[
-                Text(_error!,
-                    style: const TextStyle(color: AppColors.error)),
+                Text(_error!, style: const TextStyle(color: AppColors.error)),
                 const SizedBox(height: 10),
               ],
               _tabla(d),
@@ -522,8 +524,9 @@ class _Pestana extends StatelessWidget {
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color:
-                                activa ? Colors.white : AppColors.textSecondary)),
+                            color: activa
+                                ? Colors.white
+                                : AppColors.textSecondary)),
                   ),
                 ],
               ],
@@ -568,8 +571,8 @@ class _Cabecera extends StatelessWidget {
           SizedBox(width: _anchoEstado, child: Text('ESTADO', style: estilo)),
           SizedBox(
               width: _anchoAcciones,
-              child: Text('ACCIONES',
-                  style: estilo, textAlign: TextAlign.center)),
+              child:
+                  Text('ACCIONES', style: estilo, textAlign: TextAlign.center)),
         ],
       ),
     );

@@ -69,11 +69,8 @@ class UsuarioAdmin {
 
   /// "MG" para "María Gómez" y "AD" para "Administrador".
   String get iniciales {
-    final partes = nombre
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
+    final partes =
+        nombre.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     final base = partes.length >= 2
         ? '${partes[0][0]}${partes[1][0]}'
         : (partes.isNotEmpty ? partes[0] : usuario);
@@ -89,23 +86,14 @@ class ListaUsuariosAdmin {
   final int pagina;
   final int porPagina;
 
-  /// Totales de todas las cuentas, sin filtros.
-  final int cuentas;
-  final int administradores;
-  final int suspendidas;
-
   ListaUsuariosAdmin({
     required this.usuarios,
     required this.total,
     required this.pagina,
     required this.porPagina,
-    required this.cuentas,
-    required this.administradores,
-    required this.suspendidas,
   });
 
   factory ListaUsuariosAdmin.fromJson(Map<String, dynamic> j) {
-    final r = j['resumen'] as Map<String, dynamic>;
     int n(Object? v) => (v as num? ?? 0).toInt();
     return ListaUsuariosAdmin(
       usuarios: (j['usuarios'] as List)
@@ -114,9 +102,6 @@ class ListaUsuariosAdmin {
       total: n(j['total']),
       pagina: n(j['pagina']),
       porPagina: n(j['por_pagina']),
-      cuentas: n(r['cuentas']),
-      administradores: n(r['administradores']),
-      suspendidas: n(r['suspendidas']),
     );
   }
 

@@ -152,13 +152,6 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
 
   // ── Interfaz ─────────────────────────────────────────────────────
 
-  String _resumen(ListaUsuariosAdmin d) {
-    String n(int c, String uno, String varios) => '$c ${c == 1 ? uno : varios}';
-    return '${n(d.cuentas, 'cuenta', 'cuentas')} · '
-        '${n(d.administradores, 'administrador', 'administradores')} · '
-        '${n(d.suspendidas, 'suspendida', 'suspendidas')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final d = _datos;
@@ -168,9 +161,6 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
           children: [
             EncabezadoAdmin(
               titulo: 'Usuarios',
-              subtitulo: Text(d == null
-                  ? 'Cuentas de clientes y administradores'
-                  : _resumen(d)),
             ),
             const SizedBox(height: 20),
             _filtros(),
@@ -181,13 +171,12 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 80),
                 child: Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.secondary)),
+                    child:
+                        CircularProgressIndicator(color: AppColors.secondary)),
               )
             else ...[
               if (_error != null) ...[
-                Text(_error!,
-                    style: const TextStyle(color: AppColors.error)),
+                Text(_error!, style: const TextStyle(color: AppColors.error)),
                 const SizedBox(height: 10),
               ],
               _tabla(d),
@@ -242,8 +231,7 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
     final estado = SelectorAdmin<EstadoCuentaFiltro>(
       valor: _estado,
       opciones: {for (final e in EstadoCuentaFiltro.values) e: e.etiqueta},
-      onChanged: (e) =>
-          _filtrar(() => _estado = e ?? EstadoCuentaFiltro.todos),
+      onChanged: (e) => _filtrar(() => _estado = e ?? EstadoCuentaFiltro.todos),
     );
 
     return LayoutBuilder(builder: (context, c) {
@@ -404,17 +392,16 @@ class _Cabecera extends StatelessWidget {
           Expanded(flex: 4, child: Text('CORREO', style: estilo)),
           SizedBox(
               width: _anchoReservas,
-              child: Text('RESERVAS',
-                  style: estilo, textAlign: TextAlign.right)),
+              child:
+                  Text('RESERVAS', style: estilo, textAlign: TextAlign.right)),
           SizedBox(width: 20),
           SizedBox(
-              width: _anchoDesde,
-              child: Text('MIEMBRO DESDE', style: estilo)),
+              width: _anchoDesde, child: Text('MIEMBRO DESDE', style: estilo)),
           SizedBox(width: _anchoEstado, child: Text('ESTADO', style: estilo)),
           SizedBox(
               width: _anchoAcciones,
-              child: Text('ACCIONES',
-                  style: estilo, textAlign: TextAlign.right)),
+              child:
+                  Text('ACCIONES', style: estilo, textAlign: TextAlign.right)),
         ],
       ),
     );
@@ -487,7 +474,8 @@ class _FilaUsuario extends StatelessWidget {
       ],
     );
     final estado = _EstadoCuenta(activo: u.activo);
-    final acciones = _Acciones(usuario: u, ocupado: ocupado, onAccion: onAccion);
+    final acciones =
+        _Acciones(usuario: u, ocupado: ocupado, onAccion: onAccion);
 
     if (ancho) {
       return Container(
@@ -580,9 +568,8 @@ class _Avatar extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: usuario.esAdmin
-            ? const Color(0xFFD9B8A0)
-            : const Color(0xFFE8DCD2),
+        color:
+            usuario.esAdmin ? const Color(0xFFD9B8A0) : const Color(0xFFE8DCD2),
       ),
       child: Text(usuario.iniciales,
           style: const TextStyle(
@@ -688,8 +675,8 @@ class _Acciones extends StatelessWidget {
               ? null
               : () =>
                   onAccion(u.activo ? _Accion.suspender : _Accion.reactivar),
-          style: estilo(u.activo ? AppColors.error : AppColors.success,
-              FontWeight.w600),
+          style: estilo(
+              u.activo ? AppColors.error : AppColors.success, FontWeight.w600),
           child: Text(u.activo ? 'Suspender' : 'Reactivar'),
         ),
       ],

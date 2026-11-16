@@ -51,15 +51,6 @@ class AdminUsuarioService:
         conexion = Database.obtener_conexion()
         cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         try:
-            # Resumen de todas las cuentas (para el subtítulo, sin filtros)
-            cursor.execute("""
-                SELECT COUNT(*) AS cuentas,
-                       COUNT(*) FILTER (WHERE rol = 'admin') AS administradores,
-                       COUNT(*) FILTER (WHERE estado = FALSE) AS suspendidas
-                FROM usuarios
-            """)
-            resumen = dict(cursor.fetchone())
-
             cursor.execute(f"SELECT COUNT(*) AS total FROM usuarios u {where}", params)
             total = cursor.fetchone()["total"]
 
@@ -82,7 +73,6 @@ class AdminUsuarioService:
                 "total": total,
                 "pagina": pagina,
                 "por_pagina": self.POR_PAGINA,
-                "resumen": resumen,
             }
         finally:
             cursor.close()

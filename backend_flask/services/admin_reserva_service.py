@@ -75,12 +75,11 @@ class AdminReservaService:
         conexion = Database.obtener_conexion()
         cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         try:
-            # Cantidad por pestaña y lo vendido (con la búsqueda y los filtros aplicados)
+            # Cantidad por pestaña (con la búsqueda y los filtros aplicados)
             cursor.execute(f"""
                 SELECT COUNT(*) AS todas,
                        COUNT(*) FILTER (WHERE r.estado = 'ACTIVA') AS activas,
-                       COUNT(*) FILTER (WHERE r.estado = 'CANCELADA') AS canceladas,
-                       COALESCE(SUM(r.total) FILTER (WHERE r.estado = 'ACTIVA'), 0) AS vendido
+                       COUNT(*) FILTER (WHERE r.estado = 'CANCELADA') AS canceladas
                 {desde} {where}
             """, params)
             c = cursor.fetchone()
@@ -121,7 +120,6 @@ class AdminReservaService:
                 "pagina": 1 if exportar else pagina,
                 "por_pagina": self.POR_PAGINA,
                 "conteos": conteos,
-                "vendido": self._con_iva(c["vendido"]),
                 "vuelos": vuelos,
             }
         finally:
