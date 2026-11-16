@@ -34,6 +34,14 @@ class AdminVueloService:
     _NO_PERMITIDO_BUSQUEDA = re.compile(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ #.\-]")
     LARGO_BUSQUEDA = 50
 
+    # Nombres: igual que los campos de la app. Empiezan con letra (o número
+    # en la aerolínea) y solo llevan letras, espacios y . - ' (y & en la aerolínea).
+    _LETRAS = "A-Za-zÁÉÍÓÚÜÑáéíóúüñ"
+    _CIUDAD = re.compile(rf"^[{_LETRAS}][{_LETRAS} .'\-]*$")
+    _AEROLINEA = re.compile(rf"^[{_LETRAS}0-9][{_LETRAS}0-9 .&'\-]*$")
+    _UNA_LETRA = re.compile(rf"[{_LETRAS}]")
+    LARGO_NOMBRE = 40
+
     # ───────────────────────── Consultas base ─────────────────────────
 
     def _sql_vuelos(self):
@@ -274,13 +282,19 @@ class AdminVueloService:
 
     # ───────────────────────── Validación ─────────────────────────
 
-    @staticmethod
-    def _texto(datos, campo, nombre):
-        valor = str(datos.get(campo) or "").strip()
+    def _texto(self, datos, campo, nombre, aerolinea=False):
+        """Valida un nombre (aerolínea o ciudad) y quita los espacios de más."""
+        valor = " ".join(str(datos.get(campo) or "").split())
         if not valor:
             raise ErrorVuelo(f"{nombre} es obligatorio")
-        if len(valor) > 100:
-            raise ErrorVuelo(f"{nombre} no puede tener más de 100 caracteres")
+        if len(valor) > self.LARGO_NOMBRE:
+            raise ErrorVuelo(f"{nombre} no puede tener más de {self.LARGO_NOMBRE} caracteres")
+        if aerolinea and not self._AEROLINEA.match(valor):
+            raise ErrorVuelo(f"{nombre} solo puede tener letras, números, espacios y los signos . - & '")
+        if not aerolinea and not self._CIUDAD.match(valor):
+            raise ErrorVuelo(f"{nombre} solo puede tener letras, espacios y los signos . - '")
+        if len(self._UNA_LETRA.findall(valor)) < 2:
+            raise ErrorVuelo(f"{nombre} debe tener al menos 2 letras")
         return valor
 
     @staticmethod
@@ -298,7 +312,7 @@ class AdminVueloService:
 
     def _validar(self, cursor, datos):
         """Valida y normaliza los datos del formulario."""
-        aerolinea = self._texto(datos, "aerolinea", "La aerolínea")
+        aerolinea = self._texto(datos, "aerolinea", "La aerolínea", aerolinea=True)
         origen = self._texto(datos, "origen", "El origen")
         destino = self._texto(datos, "destino", "El destino")
         if origen.lower() == destino.lower():
@@ -319,6 +333,8 @@ class AdminVueloService:
         try:
             precio = Decimal(str(datos.get("precio"))).quantize(Decimal("0.01"), ROUND_HALF_UP)
         except Exception:
+            raise ErrorVuelo("El precio no es válido")
+        if not precio.is_finite():  # "NaN" o "Infinity" no fallan al convertirse
             raise ErrorVuelo("El precio no es válido")
         if precio <= 0:
             raise ErrorVuelo("El precio debe ser mayor a $0")

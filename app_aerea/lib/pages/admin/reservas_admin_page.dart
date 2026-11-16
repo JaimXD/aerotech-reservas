@@ -7,6 +7,7 @@ import '../../models/reserva_admin.dart';
 import '../../services/admin_reserva_service.dart';
 import '../../services/cambios_admin.dart';
 import '../../utils/descarga.dart';
+import '../../utils/entradas.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
 import '../../widgets/custom_toast.dart';
@@ -281,6 +282,8 @@ class _ReservasAdminPageState extends State<ReservasAdminPage> {
     final buscador = TextField(
       controller: _busqueda,
       onChanged: _alEscribir,
+      // Sin emojis ni símbolos que no aparecen en códigos, nombres o correos
+      inputFormatters: Entradas.busquedaReservas,
       textInputAction: TextInputAction.search,
       onSubmitted: (_) => _filtrar(() {}),
       decoration: InputDecoration(

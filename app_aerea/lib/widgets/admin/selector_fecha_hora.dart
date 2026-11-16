@@ -41,7 +41,8 @@ Future<TimeOfDay?> elegirHora(
     hourLabelText: 'Hora',
     minuteLabelText: 'Minutos',
     errorInvalidText: 'Hora no válida',
-    initialEntryMode: TimePickerEntryMode.input,
+    // Solo el reloj: el modo teclado de Flutter deja escribir letras en la web
+    initialEntryMode: TimePickerEntryMode.dialOnly,
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
       child: child!,

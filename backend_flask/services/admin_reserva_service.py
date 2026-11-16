@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal, ROUND_HALF_UP
 
 import psycopg2.extras
@@ -24,6 +25,17 @@ class AdminReservaService:
     ESTADOS = ("ACTIVA", "CANCELADA")
     PERIODOS = ("hoy", "7d", "mes", "todo")
 
+    # Lo mismo que deja escribir el buscador de la app: letras (con tildes, ñ y ü),
+    # números, espacios y @ . _ + -  (códigos, nombres, usuarios y correos).
+    _NO_PERMITIDO_BUSQUEDA = re.compile(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ @._+\-]")
+    LARGO_BUSQUEDA = 50
+
+    def _limpiar_busqueda(self, q):
+        """Quita caracteres no permitidos y espacios de más; None si no queda nada que buscar."""
+        q = self._NO_PERMITIDO_BUSQUEDA.sub("", q or "")
+        q = " ".join(q.split())[: self.LARGO_BUSQUEDA].strip()
+        return q if any(c.isalnum() for c in q) else None
+
     def _con_iva(self, valor):
         return float((Decimal(valor or 0) * self.IVA).quantize(Decimal("0.01"), ROUND_HALF_UP))
 
@@ -46,7 +58,9 @@ class AdminReservaService:
                    OR u.correo ILIKE %(patron)s)
               AND (%(vuelo)s IS NULL OR r.vuelo_id = %(vuelo)s)
         """
-        return sql, {"q": q, "patron": f"%{q}%" if q else None, "vuelo": vuelo_id}
+        # En ILIKE "_" es comodín (cualquier carácter): se escapa para buscarlo tal cual
+        patron = "%" + q.replace("_", r"\_") + "%" if q else None
+        return sql, {"q": q, "patron": patron, "vuelo": vuelo_id}
 
     # ───────────────────────── Listar ─────────────────────────
 
@@ -57,7 +71,7 @@ class AdminReservaService:
         periodo = (periodo or "todo").lower()
         if periodo not in self.PERIODOS:
             raise ErrorReserva("Periodo no válido")
-        q = (q or "").strip() or None
+        q = self._limpiar_busqueda(q)
         pagina = max(1, pagina or 1)
 
         where, params = self._filtros(q, periodo, vuelo_id)

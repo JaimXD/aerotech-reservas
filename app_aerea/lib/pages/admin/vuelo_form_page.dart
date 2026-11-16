@@ -5,6 +5,7 @@ import '../../config/app_theme.dart';
 import '../../models/vuelo.dart';
 import '../../models/vuelo_admin.dart';
 import '../../services/admin_vuelo_service.dart';
+import '../../utils/entradas.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
 import '../../widgets/admin/selector_fecha_hora.dart';
@@ -113,9 +114,13 @@ class _VueloFormPageState extends State<VueloFormPage> {
   int? get _filasValor => int.tryParse(_filas.text.trim());
   int get _totalAsientos => (_filasValor ?? 0) * _porFila;
 
+  /// Un nombre válido tiene al menos 2 letras ("Quito", no "Q" ni "-").
+  static bool _nombreValido(TextEditingController c) =>
+      Entradas.letras(c.text) >= 2;
+
   bool get _okRuta =>
-      _origen.text.trim().isNotEmpty &&
-      _destino.text.trim().isNotEmpty &&
+      _nombreValido(_origen) &&
+      _nombreValido(_destino) &&
       _origen.text.trim().toLowerCase() != _destino.text.trim().toLowerCase();
   bool get _okFecha => _salida != null && _salida!.isAfter(DateTime.now());
   bool get _okLlegada =>
@@ -124,10 +129,11 @@ class _VueloFormPageState extends State<VueloFormPage> {
       _llegada!.isAfter(_salida!) &&
       _llegada!.difference(_salida!) <= const Duration(hours: 24);
   bool get _okPrecio =>
-      (_precioValor ?? 0) > 0 && (_precioValor ?? 0) <= 10000;
+      (_precioValor ?? 0) > 0 &&
+      (_precioValor ?? 0) <= Entradas.precioMaximo;
   bool get _okCabina =>
       (_filasValor ?? 0) >= 1 && (_filasValor ?? 0) <= _maxFilas;
-  bool get _okAerolinea => _aerolinea.text.trim().isNotEmpty;
+  bool get _okAerolinea => _nombreValido(_aerolinea);
 
   bool get _listo =>
       _okAerolinea &&
@@ -308,12 +314,14 @@ class _VueloFormPageState extends State<VueloFormPage> {
               etiqueta: 'Aerolínea',
               icono: Icons.airlines_rounded,
               opciones: widget.aerolineas,
+              formatos: Entradas.aerolinea,
             ),
             _CampoSugerencias(
               controller: _origen,
               etiqueta: 'Origen',
               icono: Icons.flight_takeoff_rounded,
               opciones: widget.ciudades,
+              formatos: Entradas.ciudad,
               habilitado: !_rutaBloqueada,
             ),
             _CampoSugerencias(
@@ -321,6 +329,7 @@ class _VueloFormPageState extends State<VueloFormPage> {
               etiqueta: 'Destino',
               icono: Icons.flight_land_rounded,
               opciones: widget.ciudades,
+              formatos: Entradas.ciudad,
               habilitado: !_rutaBloqueada,
             ),
           ],
@@ -380,11 +389,11 @@ class _VueloFormPageState extends State<VueloFormPage> {
               controller: _precio,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-              ],
+              // Solo números, hasta 2 decimales y máximo \$10,000
+              inputFormatters: Entradas.precio,
               decoration: const InputDecoration(
                 labelText: 'Precio por asiento (sin IVA)',
+                helperText: 'Hasta \$10,000 · 2 decimales',
                 prefixText: '\$ ',
                 prefixIcon: Icon(Icons.payments_outlined),
               ),
@@ -558,11 +567,11 @@ class _VueloFormPageState extends State<VueloFormPage> {
                   fontWeight: FontWeight.w800,
                   color: AppColors.primary)),
           const SizedBox(height: 12),
-          item(_okAerolinea, 'Aerolínea indicada'),
-          item(_okRuta, 'Origen y destino distintos'),
+          item(_okAerolinea, 'Aerolínea indicada (mín. 2 letras)'),
+          item(_okRuta, 'Origen y destino distintos (mín. 2 letras)'),
           item(_okFecha, 'Salida en el futuro'),
           item(_okLlegada, 'Llegada después de la salida'),
-          item(_okPrecio, 'Precio mayor a \$0'),
+          item(_okPrecio, 'Precio mayor a \$0 y hasta \$10,000'),
           item(_okCabina, 'Entre 1 y $_maxFilas filas'),
         ],
       ),
@@ -682,6 +691,9 @@ class _CampoSugerencias extends StatefulWidget {
   final String etiqueta;
   final IconData icono;
   final List<String> opciones;
+
+  /// Qué se puede escribir (ver [Entradas]).
+  final List<TextInputFormatter> formatos;
   final bool habilitado;
 
   const _CampoSugerencias({
@@ -689,6 +701,7 @@ class _CampoSugerencias extends StatefulWidget {
     required this.etiqueta,
     required this.icono,
     required this.opciones,
+    required this.formatos,
     this.habilitado = true,
   });
 
@@ -720,7 +733,7 @@ class _CampoSugerenciasState extends State<_CampoSugerencias> {
         focusNode: foco,
         enabled: widget.habilitado,
         textCapitalization: TextCapitalization.words,
-        inputFormatters: [LengthLimitingTextInputFormatter(100)],
+        inputFormatters: widget.formatos,
         onSubmitted: (_) => alEnviar(),
         decoration: InputDecoration(
           labelText: widget.etiqueta,
