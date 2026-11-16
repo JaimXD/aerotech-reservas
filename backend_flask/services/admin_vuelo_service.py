@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -27,6 +28,11 @@ class AdminVueloService:
     DURACION_MAXIMA = timedelta(hours=24)
     POR_PAGINA = 10
     ESTADOS = ("PROGRAMADO", "COMPLETO", "SALIO", "CANCELADO")
+
+    # Lo mismo que deja escribir el buscador de la app: letras (con tildes, ñ y ü),
+    # números, espacios y los signos # . -  Todo lo demás se descarta.
+    _NO_PERMITIDO_BUSQUEDA = re.compile(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ #.\-]")
+    LARGO_BUSQUEDA = 50
 
     # ───────────────────────── Consultas base ─────────────────────────
 
@@ -110,17 +116,27 @@ class AdminVueloService:
 
     # ───────────────────────── Listar ─────────────────────────
 
+    def _limpiar_busqueda(self, q):
+        """Quita caracteres no permitidos y espacios de más; None si no queda nada que buscar."""
+        q = self._NO_PERMITIDO_BUSQUEDA.sub("", q or "")
+        q = " ".join(q.split())[: self.LARGO_BUSQUEDA].strip()
+        # Solo signos ("#", "-") todavía no es una búsqueda
+        return q if any(c.isalnum() for c in q) else None
+
     def listar(self, estado=None, q=None, aerolinea=None, pagina=1):
         estado = (estado or "").upper() or None
         if estado and estado not in self.ESTADOS:
             raise ErrorVuelo("Estado de vuelo no válido")
-        q = (q or "").strip() or None
+        q = self._limpiar_busqueda(q)
+        # "#41" o "41" buscan el vuelo número 41
+        numero = q.lstrip("#").strip() if q else ""
         aerolinea = (aerolinea or "").strip() or None
         pagina = max(1, pagina or 1)
 
         params = {
             "q": q,
             "patron": f"%{q}%" if q else None,
+            "numero": numero if numero.isdigit() else None,
             "aerolinea": aerolinea,
             "estado": estado,
             "limite": self.POR_PAGINA,
@@ -132,7 +148,7 @@ class AdminVueloService:
                    OR x.origen ILIKE %(patron)s
                    OR x.destino ILIKE %(patron)s
                    OR x.aerolinea ILIKE %(patron)s
-                   OR x.id::text = %(q)s)
+                   OR x.id::text = %(numero)s)
               AND (%(aerolinea)s IS NULL OR x.aerolinea = %(aerolinea)s)
         """
 

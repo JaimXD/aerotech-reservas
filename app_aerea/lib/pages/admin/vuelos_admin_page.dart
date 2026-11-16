@@ -6,6 +6,7 @@ import '../../config/app_theme.dart';
 import '../../models/vuelo_admin.dart';
 import '../../services/admin_vuelo_service.dart';
 import '../../services/cambios_admin.dart';
+import '../../utils/entradas.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
 import '../../widgets/admin/dialogo_cancelar_vuelo.dart';
@@ -305,6 +306,8 @@ class _ListaVuelosState extends State<_ListaVuelos> {
     final buscador = TextField(
       controller: _busqueda,
       onChanged: _alEscribir,
+      // Sin emojis ni símbolos que no sirven para buscar
+      inputFormatters: Entradas.busquedaVuelos,
       textInputAction: TextInputAction.search,
       onSubmitted: (_) => _filtrar(() {}),
       decoration: InputDecoration(
