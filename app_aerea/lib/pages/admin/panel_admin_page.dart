@@ -27,16 +27,12 @@ class PanelAdminPage extends StatefulWidget {
   /// Para que los enlaces del panel abran otra sección del menú.
   final ValueChanged<SeccionAdmin> onIrA;
 
-  /// Abre el formulario de nuevo vuelo.
-  final VoidCallback onNuevoVuelo;
-
   /// Abre el detalle de un vuelo (filas de "Próximas salidas").
   final ValueChanged<int> onVerVuelo;
 
   const PanelAdminPage({
     super.key,
     required this.onIrA,
-    required this.onNuevoVuelo,
     required this.onVerVuelo,
   });
 
@@ -100,7 +96,6 @@ class _PanelAdminPageState extends State<PanelAdminPage> {
     return _Contenido(
       panel: panel,
       onIrA: widget.onIrA,
-      onNuevoVuelo: widget.onNuevoVuelo,
       onVerVuelo: widget.onVerVuelo,
     );
   }
@@ -109,13 +104,11 @@ class _PanelAdminPageState extends State<PanelAdminPage> {
 class _Contenido extends StatelessWidget {
   final PanelAdmin panel;
   final ValueChanged<SeccionAdmin> onIrA;
-  final VoidCallback onNuevoVuelo;
   final ValueChanged<int> onVerVuelo;
 
   const _Contenido({
     required this.panel,
     required this.onIrA,
-    required this.onNuevoVuelo,
     required this.onVerVuelo,
   });
 
@@ -148,41 +141,18 @@ class _Contenido extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Encabezado
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.end,
-                    spacing: 16,
-                    runSpacing: 12,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(Formato.fechaLarga(hoy),
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textSecondary)),
-                          const SizedBox(height: 4),
-                          Text(_saludo(),
-                              style: TextStyle(
-                                  fontSize: compacto ? 22 : 28,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.primary)),
-                        ],
-                      ),
-                      FilledButton.icon(
-                        onPressed: onNuevoVuelo,
-                        icon: const Icon(Icons.add_rounded, size: 20),
-                        label: const Text('Nuevo vuelo'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          minimumSize: const Size(0, 44),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          textStyle: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w700),
-                        ),
-                      ),
+                      Text(Formato.fechaLarga(hoy),
+                          style: const TextStyle(
+                              fontSize: 14, color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      Text(_saludo(),
+                          style: TextStyle(
+                              fontSize: compacto ? 22 : 28,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary)),
                     ],
                   ),
                   const SizedBox(height: 22),

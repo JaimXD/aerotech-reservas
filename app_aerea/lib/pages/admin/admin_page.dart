@@ -28,14 +28,11 @@ class _AdminPageState extends State<AdminPage> {
   /// Cambia en cada visita para que la sección empiece desde su lista
   /// (por ejemplo, al pulsar "Vuelos" estando en el detalle de un vuelo).
   int _visita = 0;
-  bool _abrirNuevoVuelo = false;
   int? _vueloInicial;
 
-  void _ir(SeccionAdmin seccion, {bool nuevoVuelo = false, int? vuelo}) =>
-      setState(() {
+  void _ir(SeccionAdmin seccion, {int? vuelo}) => setState(() {
         _seccion = seccion;
         _visita++;
-        _abrirNuevoVuelo = nuevoVuelo;
         _vueloInicial = vuelo;
       });
 
@@ -54,13 +51,11 @@ class _AdminPageState extends State<AdminPage> {
       case SeccionAdmin.panel:
         return PanelAdminPage(
           onIrA: _ir,
-          onNuevoVuelo: () => _ir(SeccionAdmin.vuelos, nuevoVuelo: true),
           onVerVuelo: (id) => _ir(SeccionAdmin.vuelos, vuelo: id),
         );
       case SeccionAdmin.vuelos:
         return VuelosAdminPage(
           key: ValueKey('vuelos-$_visita'),
-          abrirNuevo: _abrirNuevoVuelo,
           vueloInicial: _vueloInicial,
         );
       case SeccionAdmin.reservas:

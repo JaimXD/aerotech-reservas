@@ -18,31 +18,25 @@ import 'vuelo_form_page.dart';
 /// Tiene su propio Navigator: la lista, el detalle y el formulario se abren
 /// dentro del área de contenido y el menú lateral sigue visible.
 class VuelosAdminPage extends StatelessWidget {
-  /// Abre el formulario de nuevo vuelo al entrar (botón del panel).
-  final bool abrirNuevo;
-
   /// Abre el detalle de este vuelo al entrar (próximas salidas del panel).
   final int? vueloInicial;
 
-  const VuelosAdminPage(
-      {super.key, this.abrirNuevo = false, this.vueloInicial});
+  const VuelosAdminPage({super.key, this.vueloInicial});
 
   @override
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (_) => MaterialPageRoute(
-        builder: (_) =>
-            _ListaVuelos(abrirNuevo: abrirNuevo, vueloInicial: vueloInicial),
+        builder: (_) => _ListaVuelos(vueloInicial: vueloInicial),
       ),
     );
   }
 }
 
 class _ListaVuelos extends StatefulWidget {
-  final bool abrirNuevo;
   final int? vueloInicial;
 
-  const _ListaVuelos({required this.abrirNuevo, required this.vueloInicial});
+  const _ListaVuelos({required this.vueloInicial});
 
   @override
   State<_ListaVuelos> createState() => _ListaVuelosState();
@@ -74,7 +68,6 @@ class _ListaVuelosState extends State<_ListaVuelos> {
       () => _cargar(silencioso: true),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.abrirNuevo) _nuevo();
       if (widget.vueloInicial != null) _verDetalle(widget.vueloInicial!);
     });
   }
