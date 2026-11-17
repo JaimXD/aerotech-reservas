@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../config/app_theme.dart';
 import '../../utils/formato.dart';
@@ -26,28 +27,268 @@ Future<DateTime?> elegirFecha(
   );
 }
 
-/// Reloj de 24 horas con los textos en español.
+/// Hora de 24 horas escrita con el teclado: dos casillas "HH : MM" que solo
+/// aceptan números (máximo 2 dígitos). Devuelve null si se cancela.
 Future<TimeOfDay?> elegirHora(
   BuildContext context, {
   required String titulo,
   TimeOfDay? inicial,
 }) {
-  return showTimePicker(
+  return showDialog<TimeOfDay>(
     context: context,
-    initialTime: inicial ?? const TimeOfDay(hour: 8, minute: 0),
-    helpText: titulo,
-    cancelText: 'Cancelar',
-    confirmText: 'Aceptar',
-    hourLabelText: 'Hora',
-    minuteLabelText: 'Minutos',
-    errorInvalidText: 'Hora no válida',
-    // Solo el reloj: el modo teclado de Flutter deja escribir letras en la web
-    initialEntryMode: TimePickerEntryMode.dialOnly,
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-      child: child!,
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    builder: (_) => _DialogoHora(
+      titulo: titulo,
+      inicial: inicial ?? const TimeOfDay(hour: 8, minute: 0),
     ),
   );
+}
+
+class _DialogoHora extends StatefulWidget {
+  final String titulo;
+  final TimeOfDay inicial;
+
+  const _DialogoHora({required this.titulo, required this.inicial});
+
+  @override
+  State<_DialogoHora> createState() => _DialogoHoraState();
+}
+
+class _DialogoHoraState extends State<_DialogoHora> {
+  late final _hora = TextEditingController(text: _dos(widget.inicial.hour));
+  late final _minutos =
+      TextEditingController(text: _dos(widget.inicial.minute));
+  final _focoHora = FocusNode();
+  final _focoMinutos = FocusNode();
+
+  static String _dos(int n) => n.toString().padLeft(2, '0');
+
+  int? get _h => int.tryParse(_hora.text);
+  int? get _m => int.tryParse(_minutos.text);
+  bool get _horaOk => _h != null && _h! <= 23;
+  bool get _minutosOk => _m != null && _m! <= 59;
+
+  @override
+  void initState() {
+    super.initState();
+    // Al entrar a una casilla se selecciona su contenido para reemplazarlo
+    for (final (foco, c) in [(_focoHora, _hora), (_focoMinutos, _minutos)]) {
+      foco.addListener(() {
+        if (foco.hasFocus) {
+          c.selection =
+              TextSelection(baseOffset: 0, extentOffset: c.text.length);
+        }
+        setState(() {});
+      });
+    }
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _focoHora.requestFocus());
+  }
+
+  @override
+  void dispose() {
+    _hora.dispose();
+    _minutos.dispose();
+    _focoHora.dispose();
+    _focoMinutos.dispose();
+    super.dispose();
+  }
+
+  void _aceptar() {
+    if (!_horaOk || !_minutosOk) return;
+    Navigator.pop(context, TimeOfDay(hour: _h!, minute: _m!));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Vacía: solo se desactiva Aceptar. Fuera de rango: se avisa en rojo.
+    final error = _h != null && !_horaOk
+        ? 'La hora va de 00 a 23'
+        : (_m != null && !_minutosOk ? 'Los minutos van de 00 a 59' : null);
+    final lista = _horaOk && _minutosOk;
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: SizedBox(
+        width: 320,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 18, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(widget.titulo,
+                  style: const TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary)),
+              const SizedBox(height: 18),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _Casilla(
+                      controller: _hora,
+                      foco: _focoHora,
+                      etiqueta: 'Hora',
+                      valida: _hora.text.isEmpty || _horaOk,
+                      // Con 2 dígitos válidos pasa sola a los minutos
+                      onChanged: (t) {
+                        setState(() {});
+                        if (t.length == 2 && _horaOk) {
+                          _focoMinutos.requestFocus();
+                        }
+                      },
+                      onSubmitted: (_) => _focoMinutos.requestFocus(),
+                    ),
+                  ),
+                  const SizedBox(
+                    width: 28,
+                    height: 80,
+                    child: Center(
+                      child: Text(':',
+                          style: TextStyle(
+                              fontSize: 48,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.primary)),
+                    ),
+                  ),
+                  Expanded(
+                    child: _Casilla(
+                      controller: _minutos,
+                      foco: _focoMinutos,
+                      etiqueta: 'Minutos',
+                      valida: _minutos.text.isEmpty || _minutosOk,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => _aceptar(),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: 22,
+                child: error == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(error,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.error)),
+                      ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.secondary),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 6),
+                  FilledButton(
+                    onPressed: lista ? _aceptar : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Aceptar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Casilla grande de 2 dígitos (solo números).
+class _Casilla extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode foco;
+  final String etiqueta;
+  final bool valida;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
+
+  const _Casilla({
+    required this.controller,
+    required this.foco,
+    required this.etiqueta,
+    required this.valida,
+    required this.onChanged,
+    required this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activa = foco.hasFocus;
+    final borde = !valida
+        ? AppColors.error
+        : (activa ? AppColors.primary : AppColors.border);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 80,
+          // Resaltado de la selección acorde a la casilla (no el morado por defecto)
+          child: TextSelectionTheme(
+            data: TextSelectionThemeData(
+              selectionColor: activa
+                  ? Colors.white.withValues(alpha: 0.3)
+                  : AppColors.secondary.withValues(alpha: 0.25),
+            ),
+            child: TextField(
+              controller: controller,
+              focusNode: foco,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.next,
+              textAlign: TextAlign.center,
+              // Solo números y como máximo 2
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(2),
+              ],
+              onChanged: onChanged,
+              onSubmitted: onSubmitted,
+              cursorColor: activa ? Colors.white : AppColors.primary,
+              style: TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.w500,
+                  color: activa
+                      ? Colors.white
+                      : (valida ? AppColors.primary : AppColors.error)),
+              decoration: InputDecoration(
+                filled: true,
+                // Fuera de rango: rojo (oscuro si está activa, claro si no)
+                fillColor: !valida
+                    ? (activa ? AppColors.error : AppColors.errorLight)
+                    : (activa ? AppColors.primary : const Color(0xFFF4EDE6)),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: borde, width: valida ? 1 : 2),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: borde, width: 2),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(etiqueta,
+            style:
+                const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      ],
+    );
+  }
 }
 
 class _Calendario extends StatefulWidget {
