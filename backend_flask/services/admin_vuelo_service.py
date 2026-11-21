@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -181,8 +182,8 @@ class AdminVueloService:
             """, params)
             vuelos = [self._a_dict(f) for f in cursor.fetchall()]
 
-            cursor.execute("SELECT DISTINCT aerolinea FROM vuelos ORDER BY aerolinea")
-            aerolineas = [f["aerolinea"] for f in cursor.fetchall()]
+            cursor.execute("SELECT nombre FROM aerolineas ORDER BY nombre")
+            aerolineas = [f["nombre"] for f in cursor.fetchall()]
 
             cursor.execute("""
                 SELECT DISTINCT INITCAP(TRIM(c)) AS ciudad
@@ -310,13 +311,50 @@ class AdminVueloService:
             raise ErrorVuelo(f"La hora de {nombre} no es válida (HH:MM)")
         return dia, h, datetime.combine(dia, h)
 
+    @staticmethod
+    def _clave(texto):
+        """Texto para comparar nombres sin tildes ni mayúsculas: "Quíto" → "quito"."""
+        sin_tildes = "".join(c for c in unicodedata.normalize("NFD", texto)
+                             if unicodedata.category(c) != "Mn")
+        return " ".join(sin_tildes.lower().split())
+
+    def _ciudad_como_ya_existe(self, cursor, ciudad):
+        """Si ya hay una ciudad igual salvo tildes o mayúsculas, usa esa (la más usada)."""
+        clave = self._clave(ciudad)
+        cursor.execute("""
+            SELECT nombre FROM (SELECT origen AS nombre FROM vuelos
+                                UNION ALL SELECT destino FROM vuelos) x
+            GROUP BY nombre ORDER BY COUNT(*) DESC, nombre
+        """)
+        for fila in cursor.fetchall():
+            if self._clave(fila["nombre"]) == clave:
+                return fila["nombre"]
+        return ciudad
+
+    # Misma expresión que el índice único de la tabla aerolineas
+    _SIN_TILDES = "translate(lower({}), 'áéíóúüñ', 'aeiouun')"
+
+    def _registrar_aerolinea(self, cursor, nombre):
+        """Devuelve la aerolínea tal como está en la tabla aerolineas.
+        Si es nueva la agrega; si ya existe escrita con otras tildes o
+        mayúsculas ("amazonia air"), devuelve la registrada ("Amazonía Air")."""
+        cursor.execute("INSERT INTO aerolineas (nombre) VALUES (%s) ON CONFLICT DO NOTHING",
+                       (nombre,))
+        cursor.execute(
+            f"SELECT nombre FROM aerolineas "
+            f"WHERE {self._SIN_TILDES.format('nombre')} = {self._SIN_TILDES.format('%s')}",
+            (nombre,))
+        return cursor.fetchone()["nombre"]
+
     def _validar(self, cursor, datos):
         """Valida y normaliza los datos del formulario."""
         aerolinea = self._texto(datos, "aerolinea", "La aerolínea", aerolinea=True)
         origen = self._texto(datos, "origen", "El origen")
         destino = self._texto(datos, "destino", "El destino")
-        if origen.lower() == destino.lower():
+        if self._clave(origen) == self._clave(destino):
             raise ErrorVuelo("El origen y el destino deben ser distintos")
+        origen = self._ciudad_como_ya_existe(cursor, origen)
+        destino = self._ciudad_como_ya_existe(cursor, destino)
 
         fecha, hora_salida, salida = self._fecha_hora(datos.get("fecha"), datos.get("hora_salida"), "salida")
         fecha_llegada, hora_llegada, llegada = self._fecha_hora(
@@ -375,6 +413,7 @@ class AdminVueloService:
         cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         try:
             d = self._validar(cursor, datos)
+            d["aerolinea"] = self._registrar_aerolinea(cursor, d["aerolinea"])
             cursor.execute("""
                 INSERT INTO vuelos (aerolinea, origen, destino, fecha, fecha_llegada,
                                     hora_salida, hora_llegada, precio, asientos_disponibles, estado)
@@ -453,6 +492,7 @@ class AdminVueloService:
                     [(vuelo_id, n, "DISPONIBLE") for n in agregar],
                 )
 
+            d["aerolinea"] = self._registrar_aerolinea(cursor, d["aerolinea"])
             cursor.execute("""
                 UPDATE vuelos
                 SET aerolinea = %s, origen = %s, destino = %s, fecha = %s, fecha_llegada = %s,
