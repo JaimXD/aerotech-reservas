@@ -185,12 +185,8 @@ class AdminVueloService:
             cursor.execute("SELECT nombre FROM aerolineas ORDER BY nombre")
             aerolineas = [f["nombre"] for f in cursor.fetchall()]
 
-            cursor.execute("""
-                SELECT DISTINCT INITCAP(TRIM(c)) AS ciudad
-                FROM vuelos, LATERAL (VALUES (origen), (destino)) AS t(c)
-                ORDER BY 1
-            """)
-            ciudades = [f["ciudad"] for f in cursor.fetchall()]
+            cursor.execute("SELECT nombre FROM ciudades ORDER BY nombre")
+            ciudades = [f["nombre"] for f in cursor.fetchall()]
 
             return {
                 "vuelos": vuelos,
@@ -318,33 +314,27 @@ class AdminVueloService:
                              if unicodedata.category(c) != "Mn")
         return " ".join(sin_tildes.lower().split())
 
-    def _ciudad_como_ya_existe(self, cursor, ciudad):
-        """Si ya hay una ciudad igual salvo tildes o mayúsculas, usa esa (la más usada)."""
-        clave = self._clave(ciudad)
-        cursor.execute("""
-            SELECT nombre FROM (SELECT origen AS nombre FROM vuelos
-                                UNION ALL SELECT destino FROM vuelos) x
-            GROUP BY nombre ORDER BY COUNT(*) DESC, nombre
-        """)
-        for fila in cursor.fetchall():
-            if self._clave(fila["nombre"]) == clave:
-                return fila["nombre"]
-        return ciudad
-
-    # Misma expresión que el índice único de la tabla aerolineas
+    # Misma expresión que el índice único de las tablas aerolineas y ciudades
     _SIN_TILDES = "translate(lower({}), 'áéíóúüñ', 'aeiouun')"
 
-    def _registrar_aerolinea(self, cursor, nombre):
-        """Devuelve la aerolínea tal como está en la tabla aerolineas.
-        Si es nueva la agrega; si ya existe escrita con otras tildes o
-        mayúsculas ("amazonia air"), devuelve la registrada ("Amazonía Air")."""
-        cursor.execute("INSERT INTO aerolineas (nombre) VALUES (%s) ON CONFLICT DO NOTHING",
+    def _registrar(self, cursor, tabla, nombre):
+        """Devuelve el nombre tal como está en la tabla (aerolineas o ciudades).
+        Si es nuevo lo agrega; si ya existe escrito con otras tildes o
+        mayúsculas ("amazonia air", "quíto"), devuelve el registrado
+        ("Amazonía Air", "Quito")."""
+        cursor.execute(f"INSERT INTO {tabla} (nombre) VALUES (%s) ON CONFLICT DO NOTHING",
                        (nombre,))
         cursor.execute(
-            f"SELECT nombre FROM aerolineas "
+            f"SELECT nombre FROM {tabla} "
             f"WHERE {self._SIN_TILDES.format('nombre')} = {self._SIN_TILDES.format('%s')}",
             (nombre,))
         return cursor.fetchone()["nombre"]
+
+    def _registrar_nombres(self, cursor, d):
+        """Deja la aerolínea, el origen y el destino como están registrados."""
+        d["aerolinea"] = self._registrar(cursor, "aerolineas", d["aerolinea"])
+        d["origen"] = self._registrar(cursor, "ciudades", d["origen"])
+        d["destino"] = self._registrar(cursor, "ciudades", d["destino"])
 
     def _validar(self, cursor, datos):
         """Valida y normaliza los datos del formulario."""
@@ -353,8 +343,6 @@ class AdminVueloService:
         destino = self._texto(datos, "destino", "El destino")
         if self._clave(origen) == self._clave(destino):
             raise ErrorVuelo("El origen y el destino deben ser distintos")
-        origen = self._ciudad_como_ya_existe(cursor, origen)
-        destino = self._ciudad_como_ya_existe(cursor, destino)
 
         fecha, hora_salida, salida = self._fecha_hora(datos.get("fecha"), datos.get("hora_salida"), "salida")
         fecha_llegada, hora_llegada, llegada = self._fecha_hora(
@@ -413,7 +401,7 @@ class AdminVueloService:
         cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         try:
             d = self._validar(cursor, datos)
-            d["aerolinea"] = self._registrar_aerolinea(cursor, d["aerolinea"])
+            self._registrar_nombres(cursor, d)
             cursor.execute("""
                 INSERT INTO vuelos (aerolinea, origen, destino, fecha, fecha_llegada,
                                     hora_salida, hora_llegada, precio, asientos_disponibles, estado)
@@ -455,6 +443,7 @@ class AdminVueloService:
                 raise ErrorVuelo("No se puede editar un vuelo que ya salió", 409)
 
             d = self._validar(cursor, datos)
+            self._registrar_nombres(cursor, d)
 
             cambia_ruta = (d["origen"].lower() != actual["origen"].lower()
                            or d["destino"].lower() != actual["destino"].lower())
@@ -492,7 +481,6 @@ class AdminVueloService:
                     [(vuelo_id, n, "DISPONIBLE") for n in agregar],
                 )
 
-            d["aerolinea"] = self._registrar_aerolinea(cursor, d["aerolinea"])
             cursor.execute("""
                 UPDATE vuelos
                 SET aerolinea = %s, origen = %s, destino = %s, fecha = %s, fecha_llegada = %s,
