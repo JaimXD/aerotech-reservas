@@ -6,6 +6,7 @@ import '../../config/app_theme.dart';
 import '../../models/usuario_admin.dart';
 import '../../services/admin_usuario_service.dart';
 import '../../services/cambios_admin.dart';
+import '../../utils/entradas.dart';
 import '../../utils/formato.dart';
 import '../../widgets/admin/admin_ui.dart';
 import '../../widgets/custom_toast.dart';
@@ -201,6 +202,8 @@ class _UsuariosAdminPageState extends State<UsuariosAdminPage> {
     final buscador = TextField(
       controller: _busqueda,
       onChanged: _alEscribir,
+      // Sin emojis ni símbolos que no aparecen en nombres, usuarios o correos
+      inputFormatters: Entradas.busquedaUsuarios,
       textInputAction: TextInputAction.search,
       onSubmitted: (_) => _filtrar(() {}),
       decoration: InputDecoration(

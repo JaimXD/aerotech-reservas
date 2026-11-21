@@ -1,3 +1,5 @@
+import re
+
 import psycopg2.extras
 from database import Database
 
@@ -18,6 +20,17 @@ class AdminUsuarioService:
     ROLES = ("user", "admin")
     ESTADOS = ("activo", "suspendido")
 
+    # Lo mismo que deja escribir el buscador de la app: letras (con tildes, ñ y ü),
+    # números, espacios y @ . _ + -  (nombres, usuarios y correos).
+    _NO_PERMITIDO_BUSQUEDA = re.compile(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ @._+\-]")
+    LARGO_BUSQUEDA = 50
+
+    def _limpiar_busqueda(self, q):
+        """Quita caracteres no permitidos y espacios de más; None si no queda nada que buscar."""
+        q = self._NO_PERMITIDO_BUSQUEDA.sub("", q or "")
+        q = " ".join(q.split())[: self.LARGO_BUSQUEDA].strip()
+        return q if any(c.isalnum() for c in q) else None
+
     # ───────────────────────── Listar ─────────────────────────
 
     def listar(self, yo_id, q=None, rol=None, estado=None, pagina=1):
@@ -27,12 +40,13 @@ class AdminUsuarioService:
         estado = (estado or "").lower() or None
         if estado and estado not in self.ESTADOS:
             raise ErrorUsuario("Estado no válido")
-        q = (q or "").strip() or None
+        q = self._limpiar_busqueda(q)
         pagina = max(1, pagina or 1)
 
         params = {
             "q": q,
-            "patron": f"%{q}%" if q else None,
+            # En ILIKE "_" es comodín (cualquier carácter): se escapa para buscarlo tal cual
+            "patron": "%" + q.replace("_", r"\_") + "%" if q else None,
             "rol": rol,
             "activo": None if estado is None else estado == "activo",
             "limite": self.POR_PAGINA,

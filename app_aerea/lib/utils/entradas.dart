@@ -57,6 +57,10 @@ class Entradas {
         LengthLimitingTextInputFormatter(largoBusqueda),
       ];
 
+  /// Buscador de la sección Usuarios del administrador: nombre, usuario o
+  /// correo, con los mismos caracteres que el de Reservas.
+  static List<TextInputFormatter> get busquedaUsuarios => busquedaReservas;
+
   /// Origen y destino de un vuelo.
   static List<TextInputFormatter> get ciudad => [
         FilteringTextInputFormatter.allow(_caracterCiudad),
