@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 
 from services.registro_service import RegistroService, ErrorRegistro
@@ -7,7 +7,13 @@ from services.auth_service import AuthService
 from services.vuelo_service import VueloService
 from services.reserva_service import ReservaService
 from services.asiento_service import AsientoService
-from services.admin_vuelo_service import AdminVueloService
+from services.admin_vuelo_service import AdminVueloService, ErrorVuelo
+from services.factura_service import FacturaService, ErrorFactura
+from services.carrito_service import CarritoService, ErrorCarrito
+from services.admin_service import AdminService
+from services.admin_reserva_service import AdminReservaService, ErrorReserva
+from services.admin_usuario_service import AdminUsuarioService, ErrorUsuario
+
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +23,11 @@ vuelo_service = VueloService()
 reserva_service = ReservaService()
 asiento_service = AsientoService()
 admin_vuelo_service = AdminVueloService()
+factura_service = FacturaService()
+carrito_service = CarritoService()
+admin_service = AdminService()
+admin_reserva_service = AdminReservaService()
+admin_usuario_service = AdminUsuarioService()
 
 def obtener_usuario_desde_token():
     try:
@@ -41,6 +52,29 @@ def obtener_usuario_desde_token():
         print("Error al validar token:", repr(e))
         return None, jsonify({"error": "Error al validar token", "detalle": str(e)}), 500   
 
+def obtener_usuario_opcional():
+    """Para lo que también puede ver un visitante (vuelos, rutas y mapa de
+    asientos). Devuelve el usuario si envió un token válido o None si
+    navega sin cuenta."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[len("Bearer "):].strip() if auth_header.startswith("Bearer ") else ""
+    if not token:
+        return None
+    try:
+        return auth_service.validar_token(token)
+    except Exception:
+        return None
+
+
+def obtener_admin_desde_token():
+    """Igual que obtener_usuario_desde_token, pero además exige rol admin (403)."""
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return None, error, codigo
+    if usuario.get("role") != "admin":
+        return None, jsonify({"error": "No autorizado: se requiere rol de administrador"}), 403
+    return usuario, None, None
+
 @app.route("/")
 def inicio():
     return jsonify({
@@ -48,8 +82,6 @@ def inicio():
         "arquitectura": "Flutter + Flask + Render + Supabase"
     })
 
-
-@app.route("/api/usuarios/registro", methods=["POST"])
 def _error_registro(e: ErrorRegistro):
     return jsonify({"error": str(e), **e.extra}), e.estado_http
 
@@ -109,6 +141,11 @@ def login():
 
         if resultado is None:
             return jsonify({"error": "Credenciales inválidas"}), 401
+        if resultado.get("cuenta_suspendida"):
+            return jsonify({
+                "error": "Tu cuenta está suspendida. Comunícate con AeroTech para reactivarla.",
+                "codigo": "CUENTA_SUSPENDIDA"
+            }), 403
         if resultado.get("correo_pendiente"):
             return jsonify({
                 "error": "Debes verificar tu correo antes de iniciar sesión",
@@ -123,16 +160,25 @@ def login():
             "detalle": str(e)
         }), 500
 
-
-@app.route("/api/vuelos", methods=["GET"])
-def vuelos():
-    print("vuelos????????????????????????????????????????????????????????????????????")
+@app.route("/api/usuarios/perfil", methods=["GET"])
+def perfil_usuario():
     usuario, error, codigo = obtener_usuario_desde_token()
-    print(error, codigo)
-
     if error:
         return error, codigo
 
+    try:
+        perfil = auth_service.obtener_perfil(usuario["id"])
+        if perfil is None:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+        return jsonify(perfil), 200
+    except Exception:
+        app.logger.exception("Error obteniendo perfil")
+        return jsonify({"error": "No se pudo cargar tu perfil"}), 500
+
+
+@app.route("/api/vuelos", methods=["GET"])
+def vuelos():
+    # Público: se puede buscar vuelos sin iniciar sesión
     origen = request.args.get("origen")
     destino = request.args.get("destino")
     fecha = request.args.get("fecha")
@@ -154,6 +200,17 @@ def vuelos():
             "error": "No se pudieron obtener los vuelos",
             "detalle": str(e)
         }), 500
+
+
+@app.route("/api/vuelos/rutas", methods=["GET"])
+def rutas_vuelos():
+    # Público: las ciudades del buscador
+    try:
+        return jsonify(vuelo_service.listar_rutas()), 200
+    except Exception:
+        app.logger.exception("Error listando rutas")
+        return jsonify({"error": "No se pudieron obtener las ciudades"}), 500
+
 
 
 @app.route("/api/reservas", methods=["POST"])
@@ -235,6 +292,26 @@ def cancelar(reserva_id):
             "detalle": str(e)
         }), 400
 
+@app.route("/api/reservas/<int:reserva_id>/factura", methods=["GET"])
+def factura_reserva(reserva_id):
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        xml, nombre = factura_service.generar_factura_xml(usuario, reserva_id)
+        return Response(
+            xml,
+            mimetype="application/xml",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    except ErrorFactura as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error generando factura")
+        return jsonify({"error": "No se pudo generar la factura"}), 500
+
+
 @app.route("/reservas/<int:reserva_id>", methods=["PUT"])
 @app.route("/api/reservas/<int:reserva_id>", methods=["PUT"])
 def editar_reserva(reserva_id):
@@ -260,13 +337,13 @@ def editar_reserva(reserva_id):
 
 @app.route("/api/vuelos/<int:vuelo_id>/asientos", methods=["GET"])
 def listar_asientos_vuelo(vuelo_id):
-    usuario, error, codigo = obtener_usuario_desde_token()
-
-    if error:
-        return error, codigo
+    # Público: el visitante ve qué asientos están libres. Con sesión,
+    # además se marcan los que tiene en su carrito.
+    usuario = obtener_usuario_opcional()
 
     try:
-        asientos = asiento_service.listar_asientos_por_vuelo(vuelo_id)
+        asientos = asiento_service.listar_asientos_por_vuelo(
+            vuelo_id, usuario["id"] if usuario else None)
 
         return jsonify(asientos), 200
 
@@ -322,54 +399,274 @@ def reservar_asientos():
             "detalle": str(e)
         }), 400
 
-@app.route("/api/admin/vuelos", methods=["POST"])
-def crear_vuelo():
-    usuario, error, codigo = obtener_usuario_desde_token()
+# ════════════════════════════════════════════════════════════════
+#  Carrito de compras (asientos apartados por 10 minutos)
+# ════════════════════════════════════════════════════════════════
 
+def _error_carrito(e: ErrorCarrito):
+    cuerpo = {"error": e.mensaje}
+    if e.asientos:
+        cuerpo["asientos"] = e.asientos
+    return jsonify(cuerpo), e.codigo
+
+
+@app.route("/api/carrito", methods=["GET"])
+def ver_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
     if error:
         return error, codigo
 
-    if usuario.get("role") != "admin" and usuario.get("tipo_usuario") != "admin":
-        return jsonify({"error": "No autorizado: se requiere rol de administrador"}), 403
+    try:
+        return jsonify(carrito_service.obtener(usuario["id"])), 200
+    except Exception:
+        app.logger.exception("Error obteniendo el carrito")
+        return jsonify({"error": "No se pudo cargar tu carrito"}), 500
 
-    datos = request.get_json(silent=True)
 
-    if not datos:
-        return jsonify({
-            "error": "No se recibió JSON válido"
-        }), 400
+@app.route("/api/carrito/items", methods=["POST"])
+def agregar_al_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
 
-    campos = [
-        "aerolinea",
-        "origen",
-        "destino",
-        "fecha",
-        "fecha_llegada",
-        "hora_salida",
-        "hora_llegada",
-        "precio",
-        "cantidad_asientos"
-    ]
+    datos = request.get_json(silent=True) or {}
+    vuelo_id = datos.get("vuelo_id")
 
-    for campo in campos:
-        if datos.get(campo) is None or datos.get(campo) == "":
-            return jsonify({
-                "error": f"El campo {campo} es obligatorio"
-            }), 400
+    if not isinstance(vuelo_id, int):
+        return jsonify({"error": "El campo vuelo_id es obligatorio"}), 400
 
     try:
-        vuelo = admin_vuelo_service.crear_vuelo_con_asientos(datos)
+        carrito = carrito_service.agregar(usuario["id"], vuelo_id, datos.get("asientos"))
+        return jsonify(carrito), 200
+    except ErrorCarrito as e:
+        return _error_carrito(e)
+    except Exception:
+        app.logger.exception("Error agregando al carrito")
+        return jsonify({"error": "No se pudo agregar al carrito"}), 500
 
-        return jsonify({
-            "mensaje": "Vuelo creado correctamente",
-            "vuelo": vuelo
-        }), 201
 
-    except Exception as e:
-        return jsonify({
-            "error": "No se pudo crear el vuelo",
-            "detalle": str(e)
-        }), 400
+@app.route("/api/carrito/items/<int:vuelo_id>", methods=["DELETE"])
+def quitar_del_carrito(vuelo_id):
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(carrito_service.quitar(usuario["id"], vuelo_id)), 200
+    except Exception:
+        app.logger.exception("Error quitando del carrito")
+        return jsonify({"error": "No se pudo quitar el vuelo"}), 500
+
+
+@app.route("/api/carrito", methods=["DELETE"])
+def vaciar_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(carrito_service.vaciar(usuario["id"])), 200
+    except Exception:
+        app.logger.exception("Error vaciando el carrito")
+        return jsonify({"error": "No se pudo vaciar el carrito"}), 500
+
+
+@app.route("/api/carrito/confirmar", methods=["POST"])
+def confirmar_carrito():
+    usuario, error, codigo = obtener_usuario_desde_token()
+    if error:
+        return error, codigo
+
+    datos = request.get_json(silent=True) or {}
+    esperados = [v for v in datos.get("vuelo_ids") or [] if isinstance(v, int)]
+
+    try:
+        resultado = carrito_service.confirmar(usuario["id"], esperados)
+    except ErrorCarrito as e:
+        return _error_carrito(e)
+    except Exception:
+        app.logger.exception("Error confirmando el carrito")
+        return jsonify({"error": "No se pudo completar la compra"}), 500
+
+    # 201 si se compró algo; 409 si todo falló por concurrencia o tiempo.
+    return jsonify(resultado), 201 if resultado["confirmadas"] else 409
+
+@app.route("/api/admin/panel", methods=["GET"])
+def panel_admin():
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+
+    try:
+        return jsonify(admin_service.obtener_panel()), 200
+    except Exception:
+        app.logger.exception("Error obteniendo el panel del administrador")
+        return jsonify({"error": "No se pudo cargar el panel"}), 500
+
+
+@app.route("/api/admin/cambios", methods=["GET"])
+def cambios_admin():
+    """Huella de los datos; la app la consulta cada 5 s para actualizarse sola."""
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        return jsonify(admin_service.obtener_cambios()), 200
+    except Exception:
+        app.logger.exception("Error obteniendo los cambios del administrador")
+        return jsonify({"error": "No se pudieron revisar los cambios"}), 500
+
+
+# ───────────────────────── Administración de vuelos ─────────────────────────
+
+def _admin_vuelos(accion, codigo_exito=200):
+    """Valida que sea admin, ejecuta la acción y traduce los errores a JSON."""
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        return jsonify(accion()), codigo_exito
+    except ErrorVuelo as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error en la administración de vuelos")
+        return jsonify({"error": "Ocurrió un error inesperado. Intenta de nuevo."}), 500
+
+@app.route("/api/admin/vuelos", methods=["GET"])
+def admin_listar_vuelos():
+    return _admin_vuelos(lambda: admin_vuelo_service.listar(
+        estado=request.args.get("estado"),
+        q=request.args.get("q"),
+        aerolinea=request.args.get("aerolinea"),
+        pagina=request.args.get("pagina", 1, type=int),
+    ))
+
+
+@app.route("/api/admin/vuelos/opciones", methods=["GET"])
+def admin_opciones_vuelo():
+    """Aerolíneas y ciudades registradas (selectores del formulario)."""
+    return _admin_vuelos(admin_vuelo_service.opciones)
+
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>", methods=["GET"])
+def admin_detalle_vuelo(vuelo_id):
+    return _admin_vuelos(lambda: admin_vuelo_service.detalle(vuelo_id))
+
+
+@app.route("/api/admin/vuelos", methods=["POST"])
+def crear_vuelo():
+    datos = request.get_json(silent=True) or {}
+    return _admin_vuelos(lambda: admin_vuelo_service.crear(datos), 201)
+
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>", methods=["PUT"])
+def admin_editar_vuelo(vuelo_id):
+    datos = request.get_json(silent=True) or {}
+    return _admin_vuelos(lambda: admin_vuelo_service.actualizar(vuelo_id, datos))
+
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>/cancelar", methods=["PUT"])
+def admin_cancelar_vuelo(vuelo_id):
+    return _admin_vuelos(lambda: admin_vuelo_service.cancelar(vuelo_id))
+
+
+@app.route("/api/admin/vuelos/<int:vuelo_id>/reactivar", methods=["PUT"])
+def admin_reactivar_vuelo(vuelo_id):
+    return _admin_vuelos(lambda: admin_vuelo_service.reactivar(vuelo_id))
+
+
+# ───────────────────────── Administración de reservas ─────────────────────────
+
+def _admin_reservas(accion):
+    """Valida que sea admin, ejecuta la acción y traduce los errores a JSON."""
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        return jsonify(accion()), 200
+    except ErrorReserva as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error en la administración de reservas")
+        return jsonify({"error": "Ocurrió un error inesperado. Intenta de nuevo."}), 500
+
+
+@app.route("/api/admin/reservas", methods=["GET"])
+def admin_listar_reservas():
+    return _admin_reservas(lambda: admin_reserva_service.listar(
+        estado=request.args.get("estado"),
+        q=request.args.get("q"),
+        periodo=request.args.get("periodo", "todo"),
+        vuelo_id=request.args.get("vuelo", type=int),
+        pagina=request.args.get("pagina", 1, type=int),
+        exportar=request.args.get("exportar") == "1",
+    ))
+
+
+@app.route("/api/admin/reservas/<int:reserva_id>/cancelar", methods=["PUT"])
+def admin_cancelar_reserva(reserva_id):
+    return _admin_reservas(lambda: admin_reserva_service.cancelar(reserva_id))
+
+
+@app.route("/api/admin/reservas/<int:reserva_id>/factura", methods=["GET"])
+def admin_factura_reserva(reserva_id):
+    usuario, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        xml, nombre = factura_service.generar_factura_admin(reserva_id)
+        return Response(
+            xml,
+            mimetype="application/xml",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    except ErrorFactura as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error generando factura (admin)")
+        return jsonify({"error": "No se pudo generar la factura"}), 500
+
+
+# ───────────────────────── Administración de usuarios ─────────────────────────
+
+def _admin_usuarios(accion):
+    """Valida que sea admin, ejecuta la acción con su id y traduce los errores a JSON."""
+    admin, error, codigo = obtener_admin_desde_token()
+    if error:
+        return error, codigo
+    try:
+        return jsonify(accion(admin["id"])), 200
+    except ErrorUsuario as e:
+        return jsonify({"error": e.mensaje}), e.codigo
+    except Exception:
+        app.logger.exception("Error en la administración de usuarios")
+        return jsonify({"error": "Ocurrió un error inesperado. Intenta de nuevo."}), 500
+
+
+@app.route("/api/admin/usuarios", methods=["GET"])
+def admin_listar_usuarios():
+    return _admin_usuarios(lambda yo: admin_usuario_service.listar(
+        yo,
+        q=request.args.get("q"),
+        rol=request.args.get("rol"),
+        estado=request.args.get("estado"),
+        pagina=request.args.get("pagina", 1, type=int),
+    ))
+
+
+@app.route("/api/admin/usuarios/<int:usuario_id>/rol", methods=["PUT"])
+def admin_cambiar_rol(usuario_id):
+    datos = request.get_json(silent=True) or {}
+    return _admin_usuarios(lambda yo: admin_usuario_service.cambiar_rol(
+        yo, usuario_id, datos.get("rol")))
+
+
+@app.route("/api/admin/usuarios/<int:usuario_id>/estado", methods=["PUT"])
+def admin_cambiar_estado_usuario(usuario_id):
+    datos = request.get_json(silent=True) or {}
+    return _admin_usuarios(lambda yo: admin_usuario_service.cambiar_estado(
+        yo, usuario_id, datos.get("activo")))
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

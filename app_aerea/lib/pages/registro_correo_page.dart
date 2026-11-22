@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../config/app_theme.dart';
 import '../services/registro_service.dart';
+import '../widgets/acceso.dart';
 import '../widgets/registro_layout.dart';
 import 'verificar_correo_page.dart';
 
@@ -177,7 +178,7 @@ class _RegistroCorreoPageState extends State<RegistroCorreoPage> {
             TextButton(
               onPressed: _cargando
                   ? null
-                  : () => Navigator.of(context).popUntil((r) => r.isFirst),
+                  : () => Acceso.volverAlLogin(context),
               child: const Text('¿Ya tienes cuenta? Inicia sesión'),
             ),
           ],

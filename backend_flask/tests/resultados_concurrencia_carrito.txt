@@ -1,0 +1,43 @@
+======================================================================
+PRUEBA DE CONCURRENCIA - CARRITO CON BLOQUEO TEMPORAL (10 min)
+Fecha: 2026-11-11 18:29:34   Backend: http://127.0.0.1:5000
+Usuarios: Jaml, Jamlxd, Jaml3
+======================================================================
+PRUEBA 1: varios usuarios apartan el mismo asiento al mismo tiempo
+----------------------------------------------------------------------
+
+Ronda 1 - vuelo 37, asiento 1A
+  Jaml            HTTP 400   3484.0 ms  Este vuelo ya salió
+  Jamlxd          HTTP 400   3304.0 ms  Este vuelo ya salió
+  Jaml3           HTTP 400   3153.1 ms  Este vuelo ya salió
+  Jaml            ve el asiento como DISPONIBLE
+  Jamlxd          ve el asiento como DISPONIBLE
+  Jaml3           ve el asiento como DISPONIBLE
+  Resultado: [FALLO] 0 ganador, 0 rechazados con 409
+
+Ronda 2 - vuelo 37, asiento 1B
+  Jaml            HTTP 400   3667.1 ms  Este vuelo ya salió
+  Jamlxd          HTTP 400   3507.6 ms  Este vuelo ya salió
+  Jaml3           HTTP 400   3870.5 ms  Este vuelo ya salió
+  Jaml            ve el asiento como DISPONIBLE
+  Jamlxd          ve el asiento como DISPONIBLE
+  Jaml3           ve el asiento como DISPONIBLE
+  Resultado: [FALLO] 0 ganador, 0 rechazados con 409
+
+Ronda 3 - vuelo 37, asiento 1C
+  Jaml            HTTP 400   3343.1 ms  Este vuelo ya salió
+  Jamlxd          HTTP 400   3572.3 ms  Este vuelo ya salió
+  Jaml3           HTTP 400   3767.4 ms  Este vuelo ya salió
+  Jaml            ve el asiento como DISPONIBLE
+  Jamlxd          ve el asiento como DISPONIBLE
+  Jaml3           ve el asiento como DISPONIBLE
+  Resultado: [FALLO] 0 ganador, 0 rechazados con 409
+
+======================================================================
+RESUMEN
+  [FALLO] Carrera por 1A
+  [FALLO] Carrera por 1B
+  [FALLO] Carrera por 1C
+
+0 de 3 pruebas pasaron.
+======================================================================
