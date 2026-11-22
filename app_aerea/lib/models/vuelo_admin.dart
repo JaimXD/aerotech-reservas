@@ -34,6 +34,10 @@ class VueloAdmin {
   /// Suma de las reservas activas, con IVA.
   final double ingresos;
 
+  /// Resumen de los datos editables. Se envía al guardar para detectar si
+  /// otro administrador modificó el vuelo mientras se editaba.
+  final String huella;
+
   VueloAdmin({
     required this.datos,
     required this.estado,
@@ -45,6 +49,7 @@ class VueloAdmin {
     required this.reservasActivas,
     required this.reservasCanceladas,
     required this.ingresos,
+    this.huella = '',
   });
 
   factory VueloAdmin.fromJson(Map<String, dynamic> json) {
@@ -60,6 +65,7 @@ class VueloAdmin {
       reservasActivas: n('reservas_activas'),
       reservasCanceladas: n('reservas_canceladas'),
       ingresos: (json['ingresos'] as num? ?? 0).toDouble(),
+      huella: json['huella'] as String? ?? '',
     );
   }
 

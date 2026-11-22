@@ -39,23 +39,38 @@ class VueloFormPage extends StatefulWidget {
 
 class _VueloFormPageState extends State<VueloFormPage> {
   static const _letras = 'ABCDEF';
-  static const _maxFilas = 60;
+
+  /// Cabinas como las de aviones reales: asientos por fila → filas posibles
+  /// (igual que en el backend).
+  static const _cabinas = {
+    2: (min: 4, max: 10, ejemplo: 'Beechcraft 1900'),
+    3: (min: 4, max: 10, ejemplo: 'Jetstream 32'),
+    4: (min: 10, max: 25, ejemplo: 'ATR 72, Embraer 190'),
+    5: (min: 20, max: 30, ejemplo: 'Airbus A220'),
+    6: (min: 20, max: 40, ejemplo: 'Airbus A320, Boeing 737'),
+  };
 
   final _service = AdminVueloService();
   final _aerolinea = TextEditingController();
   final _origen = TextEditingController();
   final _destino = TextEditingController();
   final _precio = TextEditingController();
-  final _filas = TextEditingController(text: '5');
+  final _filas = TextEditingController(text: '30');
+  final _focoFilas = FocusNode();
 
   DateTime? _fechaSalida;
   TimeOfDay? _horaSalida;
   DateTime? _fechaLlegada;
   TimeOfDay? _horaLlegada;
-  int _porFila = 4;
+  int _porFila = 6;
 
   bool _guardando = false;
   String? _error;
+
+  /// Opciones de los selectores: las que recibe la página y, en cuanto
+  /// llegan, las registradas en el servidor.
+  late List<String> _aerolineas = widget.aerolineas;
+  late List<String> _ciudades = widget.ciudades;
 
   bool get _editando => widget.vuelo != null;
 
@@ -75,15 +90,23 @@ class _VueloFormPageState extends State<VueloFormPage> {
       _horaSalida = _hora(d.horaSalida);
       _horaLlegada = _hora(d.horaLlegada);
       if (base.filas > 0) _filas.text = '${base.filas}';
-      if (base.asientosPorFila >= 2) _porFila = base.asientosPorFila;
+      if (_cabinas.containsKey(base.asientosPorFila)) {
+        _porFila = base.asientosPorFila;
+      }
       if (_editando) {
         _fechaSalida = Formato.soloFecha(d.salida);
         _fechaLlegada = Formato.soloFecha(d.llegada);
       }
     }
+    _ajustarFilas();
+    _cargarOpciones();
     for (final c in [_aerolinea, _origen, _destino, _precio, _filas]) {
       c.addListener(() => setState(() {}));
     }
+    // Al salir del campo, las filas quedan dentro del rango de la cabina
+    _focoFilas.addListener(() {
+      if (!_focoFilas.hasFocus) setState(_ajustarFilas);
+    });
   }
 
   @override
@@ -91,7 +114,30 @@ class _VueloFormPageState extends State<VueloFormPage> {
     for (final c in [_aerolinea, _origen, _destino, _precio, _filas]) {
       c.dispose();
     }
+    _focoFilas.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarOpciones() async {
+    try {
+      final o = await _service.opciones();
+      if (!mounted) return;
+      setState(() {
+        _aerolineas = o.aerolineas;
+        _ciudades = o.ciudades;
+      });
+    } catch (_) {
+      // Sin conexión se quedan las recibidas; igual se puede escribir
+    }
+  }
+
+  ({int min, int max, String ejemplo}) get _cabina => _cabinas[_porFila]!;
+
+  /// Lleva las filas al rango de la cabina elegida (vacío → el mínimo).
+  void _ajustarFilas() {
+    final n = (int.tryParse(_filas.text) ?? _cabina.min)
+        .clamp(_cabina.min, _cabina.max);
+    if (_filas.text != '$n') _filas.text = '$n';
   }
 
   // ── Datos calculados ─────────────────────────────────────────────
@@ -121,18 +167,18 @@ class _VueloFormPageState extends State<VueloFormPage> {
   bool get _okRuta =>
       _nombreValido(_origen) &&
       _nombreValido(_destino) &&
-      _origen.text.trim().toLowerCase() != _destino.text.trim().toLowerCase();
+      Entradas.clave(_origen.text) != Entradas.clave(_destino.text);
   bool get _okFecha => _salida != null && _salida!.isAfter(DateTime.now());
   bool get _okLlegada =>
       _salida != null &&
       _llegada != null &&
-      _llegada!.isAfter(_salida!) &&
-      _llegada!.difference(_salida!) <= const Duration(hours: 24);
+      _llegada!.difference(_salida!) >= _duracionMinima &&
+      _llegada!.difference(_salida!) <= _duracionMaxima;
   bool get _okPrecio =>
       (_precioValor ?? 0) > 0 &&
       (_precioValor ?? 0) <= Entradas.precioMaximo;
   bool get _okCabina =>
-      (_filasValor ?? 0) >= 1 && (_filasValor ?? 0) <= _maxFilas;
+      (_filasValor ?? 0) >= _cabina.min && (_filasValor ?? 0) <= _cabina.max;
   bool get _okAerolinea => _nombreValido(_aerolinea);
 
   bool get _listo =>
@@ -151,6 +197,49 @@ class _VueloFormPageState extends State<VueloFormPage> {
 
   // ── Acciones ─────────────────────────────────────────────────────
 
+  /// Horas de 5 en 5 minutos y vuelos de 30 min a 24 h (igual que el backend).
+  static const _paso = 5;
+  static const _duracionMinima = Duration(minutes: 30);
+  static const _duracionMaxima = Duration(hours: 24);
+  static const _ultimaHora = 23 * 60 + 55; // 23:55
+
+  /// Sube los minutos al siguiente múltiplo de [_paso] (08:02 → 08:05).
+  static int _redondear(int m) => (m + _paso - 1) ~/ _paso * _paso;
+
+  static int _minutos(TimeOfDay t) => t.hour * 60 + t.minute;
+  static TimeOfDay _deMinutos(int m) =>
+      TimeOfDay(hour: m ~/ 60, minute: m % 60);
+
+  /// Cambia la salida sin dejar nunca un horario imposible:
+  /// - una hora de hoy que ya pasó se borra;
+  /// - si había una llegada válida, se mueve con la salida (misma duración);
+  /// - si no, la llegada que ya no sirve se borra.
+  void _cambiarSalida({DateTime? fecha, TimeOfDay? hora}) {
+    final duracion = _okLlegada ? _llegada!.difference(_salida!) : null;
+    _fechaSalida = fecha ?? _fechaSalida;
+    _horaSalida = hora ?? _horaSalida;
+    if (_salida != null && !_salida!.isAfter(DateTime.now())) {
+      _horaSalida = null;
+    }
+    final salida = _salida;
+    if (salida != null && duracion != null) {
+      final llegada = salida.add(duracion);
+      _fechaLlegada = Formato.soloFecha(llegada);
+      _horaLlegada = TimeOfDay(hour: llegada.hour, minute: llegada.minute);
+      return;
+    }
+    final f = _fechaSalida;
+    if (f != null &&
+        (_fechaLlegada == null ||
+            _fechaLlegada!.isBefore(f) ||
+            _fechaLlegada!.isAfter(Formato.sumarDias(f, 1)))) {
+      _fechaLlegada = f;
+    }
+    if (_salida != null && _llegada != null && !_okLlegada) {
+      _horaLlegada = null;
+    }
+  }
+
   Future<void> _elegirFechaSalida() async {
     final hoy = DateTime.now();
     final f = await elegirFecha(context,
@@ -158,37 +247,58 @@ class _VueloFormPageState extends State<VueloFormPage> {
         inicial: _fechaSalida,
         primera: hoy,
         ultima: DateTime(hoy.year + 2, hoy.month, hoy.day));
+    if (f != null) setState(() => _cambiarSalida(fecha: f));
+  }
+
+  /// Si la salida es hoy, solo desde los próximos 5 minutos en adelante.
+  Future<void> _elegirHoraSalida() async {
+    final ahora = DateTime.now();
+    final esHoy = _fechaSalida == Formato.soloFecha(ahora);
+    final desde = esHoy ? _redondear(ahora.hour * 60 + ahora.minute + 1) : 0;
+    if (desde > _ultimaHora) return;
+    final h = await elegirHora(context,
+        titulo: 'Hora de salida',
+        inicial: _horaSalida,
+        desde: _deMinutos(desde),
+        hasta: _deMinutos(_ultimaHora),
+        paso: _paso);
+    if (h != null) setState(() => _cambiarSalida(hora: h));
+  }
+
+  /// La llegada es el mismo día de la salida o el siguiente (máx. 24 h).
+  Future<void> _elegirFechaLlegada() async {
+    final salida = _fechaSalida!;
+    // El mismo día solo si cabe la duración mínima antes de medianoche
+    final mismoDiaPosible =
+        _minutos(_horaSalida!) + _duracionMinima.inMinutes <= _ultimaHora;
+    final f = await elegirFecha(context,
+        titulo: 'Fecha de llegada',
+        inicial: _fechaLlegada,
+        primera: mismoDiaPosible ? salida : Formato.sumarDias(salida, 1),
+        ultima: Formato.sumarDias(salida, 1));
     if (f == null) return;
     setState(() {
-      // La llegada acompaña a la salida si quedaba antes
-      if (_fechaLlegada == null ||
-          _fechaLlegada!.isBefore(f) ||
-          _fechaLlegada == _fechaSalida) {
-        _fechaLlegada = f;
-      }
-      _fechaSalida = f;
+      _fechaLlegada = f;
+      if (_llegada != null && !_okLlegada) _horaLlegada = null;
     });
   }
 
-  Future<void> _elegirFechaLlegada() async {
-    final hoy = DateTime.now();
-    final f = await elegirFecha(context,
-        titulo: 'Fecha de llegada',
-        inicial: _fechaLlegada ?? _fechaSalida,
-        primera: _fechaSalida ?? hoy,
-        ultima: Formato.sumarDias(_fechaSalida ?? hoy, 1));
-    if (f != null) setState(() => _fechaLlegada = f);
-  }
-
-  Future<void> _elegirHoraSalida() async {
-    final h = await elegirHora(context,
-        titulo: 'Hora de salida', inicial: _horaSalida);
-    if (h != null) setState(() => _horaSalida = h);
-  }
-
+  /// Al menos 30 min después de la salida y como máximo 24 h después.
   Future<void> _elegirHoraLlegada() async {
+    final salida = _minutos(_horaSalida!);
+    final minima = _duracionMinima.inMinutes;
+    final mismoDia = _fechaLlegada == _fechaSalida;
+    final desde = _redondear(mismoDia
+        ? salida + minima
+        : (salida + minima - 24 * 60).clamp(0, 24 * 60));
+    final hasta = mismoDia ? _ultimaHora : salida;
+    if (desde > hasta) return;
     final h = await elegirHora(context,
-        titulo: 'Hora de llegada', inicial: _horaLlegada ?? _horaSalida);
+        titulo: 'Hora de llegada',
+        inicial: _horaLlegada ?? _deMinutos(desde),
+        desde: _deMinutos(desde),
+        hasta: _deMinutos(hasta),
+        paso: _paso);
     if (h != null) setState(() => _horaLlegada = h);
   }
 
@@ -209,6 +319,8 @@ class _VueloFormPageState extends State<VueloFormPage> {
       'precio': _precioValor,
       'filas': _filasValor,
       'asientos_por_fila': _porFila,
+      // Para saber si otro administrador lo cambió mientras se editaba
+      if (_editando) 'huella': widget.vuelo!.huella,
     };
     try {
       final guardado = _editando
@@ -313,23 +425,33 @@ class _VueloFormPageState extends State<VueloFormPage> {
               controller: _aerolinea,
               etiqueta: 'Aerolínea',
               icono: Icons.airlines_rounded,
-              opciones: widget.aerolineas,
+              opciones: _aerolineas,
               formatos: Entradas.aerolinea,
             ),
+            // El origen y el destino no pueden ser la misma ciudad:
+            // ni se puede escribir ni aparece entre las sugerencias.
             _CampoSugerencias(
               controller: _origen,
               etiqueta: 'Origen',
               icono: Icons.flight_takeoff_rounded,
-              opciones: widget.ciudades,
-              formatos: Entradas.ciudad,
+              opciones: _ciudades,
+              excluir: _destino.text,
+              formatos: [
+                ...Entradas.ciudad,
+                Entradas.distintoDe(() => _destino.text),
+              ],
               habilitado: !_rutaBloqueada,
             ),
             _CampoSugerencias(
               controller: _destino,
               etiqueta: 'Destino',
               icono: Icons.flight_land_rounded,
-              opciones: widget.ciudades,
-              formatos: Entradas.ciudad,
+              opciones: _ciudades,
+              excluir: _origen.text,
+              formatos: [
+                ...Entradas.ciudad,
+                Entradas.distintoDe(() => _origen.text),
+              ],
               habilitado: !_rutaBloqueada,
             ),
           ],
@@ -350,11 +472,12 @@ class _VueloFormPageState extends State<VueloFormPage> {
               icono: Icons.event_rounded,
               onTap: _elegirFechaSalida,
             ),
+            // Cada campo se habilita cuando el anterior tiene valor
             _CampoToque(
               etiqueta: 'Hora de salida',
               valor: _horaSalida == null ? null : _hhmm(_horaSalida!),
               icono: Icons.schedule_rounded,
-              onTap: _elegirHoraSalida,
+              onTap: _fechaSalida == null ? null : _elegirHoraSalida,
             ),
             _CampoToque(
               etiqueta: 'Fecha de llegada',
@@ -362,24 +485,20 @@ class _VueloFormPageState extends State<VueloFormPage> {
                   ? null
                   : Formato.fechaConAnio(_fechaLlegada!),
               icono: Icons.event_available_rounded,
-              onTap: _elegirFechaLlegada,
+              onTap: _salida == null ? null : _elegirFechaLlegada,
             ),
             _CampoToque(
               etiqueta: 'Hora de llegada',
               valor: _horaLlegada == null ? null : _hhmm(_horaLlegada!),
               icono: Icons.schedule_rounded,
-              onTap: _elegirHoraLlegada,
+              onTap: _salida == null || _fechaLlegada == null
+                  ? null
+                  : _elegirHoraLlegada,
             ),
           ],
-          nota: _salida != null && _llegada != null && !_okLlegada
-              ? (_llegada!.isAfter(_salida!)
-                  ? 'Un vuelo no puede durar más de 24 horas.'
-                  : 'La llegada debe ser después de la salida '
-                      '(${_hhmm(_horaSalida!)}).')
-              : (_salida != null && _llegada != null
-                  ? 'Duración: ${Formato.duracion(_llegada!.difference(_salida!).inMinutes)}'
-                  : null),
-          notaError: _salida != null && _llegada != null && !_okLlegada,
+          nota: _okLlegada
+              ? 'Duración: ${Formato.duracion(_llegada!.difference(_salida!).inMinutes)}'
+              : null,
         ),
         const SizedBox(height: 16),
         _Seccion(
@@ -398,31 +517,40 @@ class _VueloFormPageState extends State<VueloFormPage> {
                 prefixIcon: Icon(Icons.payments_outlined),
               ),
             ),
+            // Solo deja escribir hasta el máximo de la cabina elegida
             TextField(
               controller: _filas,
+              focusNode: _focoFilas,
               keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(2),
-              ],
-              decoration: const InputDecoration(
+              inputFormatters: Entradas.filas(_cabina.max),
+              decoration: InputDecoration(
                 labelText: 'Filas',
-                helperText: 'De 1 a $_maxFilas',
-                prefixIcon: Icon(Icons.table_rows_outlined),
+                helperText: 'De ${_cabina.min} a ${_cabina.max} '
+                    '(${_cabina.ejemplo})',
+                prefixIcon: const Icon(Icons.table_rows_outlined),
               ),
             ),
             DropdownButtonFormField<int>(
               initialValue: _porFila,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Asientos por fila',
                 prefixIcon: Icon(Icons.event_seat_outlined),
               ),
               items: [
-                for (var n = 2; n <= _letras.length; n++)
+                for (final n in _cabinas.keys)
                   DropdownMenuItem(
-                      value: n, child: Text('$n  (${_letrasFila(n)})')),
+                      value: n,
+                      child: Text(
+                          '$n  (${_letrasFila(n)})  ·  '
+                          '${_cabinas[n]!.min} a ${_cabinas[n]!.max} filas',
+                          overflow: TextOverflow.ellipsis)),
               ],
-              onChanged: (n) => setState(() => _porFila = n ?? 4),
+              // Al cambiar la cabina, las filas se ajustan a su rango
+              onChanged: (n) => setState(() {
+                _porFila = n ?? _porFila;
+                _ajustarFilas();
+              }),
             ),
           ],
           pie: _resumenCabina(),
@@ -453,7 +581,7 @@ class _VueloFormPageState extends State<VueloFormPage> {
                 Text(
                     _okCabina
                         ? '$_totalAsientos asientos'
-                        : 'Indica entre 1 y $_maxFilas filas',
+                        : 'Indica entre ${_cabina.min} y ${_cabina.max} filas',
                     style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         color: AppColors.primary)),
@@ -570,9 +698,9 @@ class _VueloFormPageState extends State<VueloFormPage> {
           item(_okAerolinea, 'Aerolínea indicada (mín. 2 letras)'),
           item(_okRuta, 'Origen y destino distintos (mín. 2 letras)'),
           item(_okFecha, 'Salida en el futuro'),
-          item(_okLlegada, 'Llegada después de la salida'),
+          item(_okLlegada, 'Duración entre 30 min y 24 h'),
           item(_okPrecio, 'Precio mayor a \$0 y hasta \$10,000'),
-          item(_okCabina, 'Entre 1 y $_maxFilas filas'),
+          item(_okCabina, 'Entre ${_cabina.min} y ${_cabina.max} filas'),
         ],
       ),
     );
@@ -586,14 +714,12 @@ class _Seccion extends StatelessWidget {
   final String titulo;
   final List<Widget> campos;
   final String? nota;
-  final bool notaError;
   final Widget? pie;
 
   const _Seccion({
     required this.titulo,
     required this.campos,
     this.nota,
-    this.notaError = false,
     this.pie,
   });
 
@@ -626,21 +752,13 @@ class _Seccion extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                    notaError
-                        ? Icons.error_outline_rounded
-                        : Icons.info_outline_rounded,
-                    size: 18,
-                    color:
-                        notaError ? AppColors.error : AppColors.textSecondary),
+                const Icon(Icons.info_outline_rounded,
+                    size: 18, color: AppColors.textSecondary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(nota!,
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: notaError
-                              ? AppColors.error
-                              : AppColors.textSecondary)),
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textSecondary)),
                 ),
               ],
             ),
@@ -657,7 +775,9 @@ class _CampoToque extends StatelessWidget {
   final String etiqueta;
   final String? valor;
   final IconData icono;
-  final VoidCallback onTap;
+
+  /// null: deshabilitado (falta elegir el campo anterior).
+  final VoidCallback? onTap;
 
   const _CampoToque({
     required this.etiqueta,
@@ -674,6 +794,7 @@ class _CampoToque extends StatelessWidget {
       child: InputDecorator(
         isEmpty: valor == null,
         decoration: InputDecoration(
+          enabled: onTap != null,
           labelText: etiqueta,
           prefixIcon: Icon(icono),
           suffixIcon: const Icon(Icons.arrow_drop_down_rounded),
@@ -685,12 +806,17 @@ class _CampoToque extends StatelessWidget {
   }
 }
 
-/// Campo de texto con sugerencias (aerolíneas y ciudades ya usadas).
-class _CampoSugerencias extends StatefulWidget {
+/// Selector de aerolínea o ciudad: la flecha despliega todas las registradas
+/// y al escribir se filtran (sin importar tildes ni mayúsculas). También se
+/// puede escribir una nueva; el backend la registra al guardar.
+class _CampoSugerencias extends StatelessWidget {
   final TextEditingController controller;
   final String etiqueta;
   final IconData icono;
   final List<String> opciones;
+
+  /// Opción que no se ofrece (la ciudad elegida en el otro campo).
+  final String? excluir;
 
   /// Qué se puede escribir (ver [Entradas]).
   final List<TextInputFormatter> formatos;
@@ -702,69 +828,56 @@ class _CampoSugerencias extends StatefulWidget {
     required this.icono,
     required this.opciones,
     required this.formatos,
+    this.excluir,
     this.habilitado = true,
   });
 
-  @override
-  State<_CampoSugerencias> createState() => _CampoSugerenciasState();
-}
-
-class _CampoSugerenciasState extends State<_CampoSugerencias> {
-  final _foco = FocusNode();
-
-  @override
-  void dispose() {
-    _foco.dispose();
-    super.dispose();
+  /// Escribiendo "cue" quedan las que contienen "cue". Si el texto ya es una
+  /// opción completa (o está vacío), se muestran todas para poder cambiarla.
+  List<DropdownMenuEntry<String>> _filtrar(
+      List<DropdownMenuEntry<String>> entradas, String texto) {
+    final t = Entradas.clave(texto);
+    if (t.isEmpty || entradas.any((e) => Entradas.clave(e.value) == t)) {
+      return entradas;
+    }
+    return entradas.where((e) => Entradas.clave(e.value).contains(t)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    return RawAutocomplete<String>(
-      textEditingController: widget.controller,
-      focusNode: _foco,
-      optionsBuilder: (valor) {
-        final t = valor.text.trim().toLowerCase();
-        return widget.opciones.where((o) =>
-            o.toLowerCase().contains(t) && o.toLowerCase() != t);
-      },
-      fieldViewBuilder: (context, controller, foco, alEnviar) => TextField(
-        controller: controller,
-        focusNode: foco,
-        enabled: widget.habilitado,
-        textCapitalization: TextCapitalization.words,
-        inputFormatters: widget.formatos,
-        onSubmitted: (_) => alEnviar(),
-        decoration: InputDecoration(
-          labelText: widget.etiqueta,
-          prefixIcon: Icon(widget.icono),
-          suffixIcon:
-              widget.habilitado ? null : const Icon(Icons.lock_outline_rounded),
-        ),
-      ),
-      optionsViewBuilder: (context, alElegir, opciones) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(
-          elevation: 6,
-          color: Colors.white,
+    final fuera = Entradas.clave(excluir ?? '');
+    final entradas = [
+      for (final o in opciones)
+        if (fuera.isEmpty || Entradas.clave(o) != fuera)
+          DropdownMenuEntry(value: o, label: o),
+    ];
+    return DropdownMenu<String>(
+      controller: controller,
+      enabled: habilitado,
+      expandedInsets: EdgeInsets.zero,
+      requestFocusOnTap: true,
+      enableFilter: true,
+      enableSearch: false,
+      filterCallback: _filtrar,
+      inputFormatters: formatos,
+      menuHeight: 260,
+      label: Text(etiqueta),
+      leadingIcon: Icon(icono),
+      trailingIcon: Icon(habilitado
+          ? Icons.arrow_drop_down_rounded
+          : Icons.lock_outline_rounded),
+      selectedTrailingIcon: const Icon(Icons.arrow_drop_up_rounded),
+      menuStyle: MenuStyle(
+        backgroundColor: const WidgetStatePropertyAll(Colors.white),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.white),
+        elevation: const WidgetStatePropertyAll(6),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 6)),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 240, maxWidth: 320),
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              shrinkWrap: true,
-              children: [
-                for (final o in opciones)
-                  ListTile(
-                    dense: true,
-                    title: Text(o),
-                    onTap: () => alElegir(o),
-                  ),
-              ],
-            ),
-          ),
-        ),
+          side: const BorderSide(color: AppColors.border),
+        )),
       ),
+      dropdownMenuEntries: entradas,
     );
   }
 }

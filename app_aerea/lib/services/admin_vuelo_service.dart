@@ -41,6 +41,16 @@ class AdminVueloService {
     return ListaVuelosAdmin.fromJson(_procesar(r, "cargar los vuelos"));
   }
 
+  /// Aerolíneas y ciudades registradas (selectores del formulario).
+  Future<({List<String> aerolineas, List<String> ciudades})> opciones() async {
+    final r = await http.get(Uri.parse("$_base/opciones"), headers: _headers);
+    final datos = _procesar(r, "cargar las aerolíneas y ciudades");
+    return (
+      aerolineas: List<String>.from(datos['aerolineas'] ?? const []),
+      ciudades: List<String>.from(datos['ciudades'] ?? const []),
+    );
+  }
+
   Future<DetalleVueloAdmin> detalle(int id) async {
     final r = await http.get(Uri.parse("$_base/$id"), headers: _headers);
     return DetalleVueloAdmin.fromJson(_procesar(r, "cargar el vuelo"));

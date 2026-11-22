@@ -77,6 +77,61 @@ class Entradas {
 
   /// Precio en dólares: hasta 2 decimales y como máximo [precioMaximo].
   static List<TextInputFormatter> get precio => [_FormatoPrecio()];
+
+  /// Filas de la cabina: solo números, sin 0 inicial y como máximo [maximo].
+  static List<TextInputFormatter> filas(int maximo) => [
+        FilteringTextInputFormatter.digitsOnly,
+        _FormatoFilas(maximo),
+      ];
+
+  /// No deja escribir un nombre igual a [otro] (sin contar tildes ni
+  /// mayúsculas). Así el destino no puede ser el mismo que el origen.
+  static TextInputFormatter distintoDe(String Function() otro) =>
+      _DistintoDe(otro);
+
+  static const _sinTilde = {
+    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u', 'ñ': 'n'
+  };
+
+  /// Texto para comparar nombres: "  Quíto " → "quito".
+  static String clave(String texto) => texto
+      .toLowerCase()
+      .split('')
+      .map((c) => _sinTilde[c] ?? c)
+      .join()
+      .split(' ')
+      .where((p) => p.isNotEmpty)
+      .join(' ');
+}
+
+class _FormatoFilas extends TextInputFormatter {
+  final int maximo;
+
+  _FormatoFilas(this.maximo);
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue anterior, TextEditingValue nuevo) {
+    final texto = nuevo.text;
+    if (texto.isEmpty) return nuevo;
+    if (texto.startsWith('0') || int.parse(texto) > maximo) return anterior;
+    return nuevo;
+  }
+}
+
+class _DistintoDe extends TextInputFormatter {
+  final String Function() otro;
+
+  _DistintoDe(this.otro);
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue anterior, TextEditingValue nuevo) {
+    final clave = Entradas.clave(nuevo.text);
+    return clave.isNotEmpty && clave == Entradas.clave(otro())
+        ? anterior
+        : nuevo;
+  }
 }
 
 /// Solo deja escribir un precio válido: "85", "85.5", "85.50", "0.99".

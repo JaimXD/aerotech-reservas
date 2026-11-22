@@ -29,17 +29,32 @@ Future<DateTime?> elegirFecha(
 
 /// Hora de 24 horas escrita con el teclado: dos casillas "HH : MM" que solo
 /// aceptan números (máximo 2 dígitos). Devuelve null si se cancela.
+///
+/// Solo se puede aceptar una hora entre [desde] y [hasta] (ambas incluidas)
+/// con minutos múltiplos de [paso] (5 → 08:00, 08:05, 08:10…).
 Future<TimeOfDay?> elegirHora(
   BuildContext context, {
   required String titulo,
   TimeOfDay? inicial,
+  TimeOfDay desde = const TimeOfDay(hour: 0, minute: 0),
+  TimeOfDay hasta = const TimeOfDay(hour: 23, minute: 59),
+  int paso = 1,
 }) {
+  final base = inicial ?? const TimeOfDay(hour: 8, minute: 0);
+  final minutos = base.hour * 60 + base.minute;
+  // Si la hora sugerida no se permite, se propone la primera permitida
+  final dentro = minutos >= desde.hour * 60 + desde.minute &&
+      minutos <= hasta.hour * 60 + hasta.minute &&
+      base.minute % paso == 0;
   return showDialog<TimeOfDay>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.45),
     builder: (_) => _DialogoHora(
       titulo: titulo,
-      inicial: inicial ?? const TimeOfDay(hour: 8, minute: 0),
+      inicial: dentro ? base : desde,
+      desde: desde,
+      hasta: hasta,
+      paso: paso,
     ),
   );
 }
@@ -47,8 +62,17 @@ Future<TimeOfDay?> elegirHora(
 class _DialogoHora extends StatefulWidget {
   final String titulo;
   final TimeOfDay inicial;
+  final TimeOfDay desde;
+  final TimeOfDay hasta;
+  final int paso;
 
-  const _DialogoHora({required this.titulo, required this.inicial});
+  const _DialogoHora({
+    required this.titulo,
+    required this.inicial,
+    required this.desde,
+    required this.hasta,
+    required this.paso,
+  });
 
   @override
   State<_DialogoHora> createState() => _DialogoHoraState();
@@ -65,8 +89,26 @@ class _DialogoHoraState extends State<_DialogoHora> {
 
   int? get _h => int.tryParse(_hora.text);
   int? get _m => int.tryParse(_minutos.text);
-  bool get _horaOk => _h != null && _h! <= 23;
-  bool get _minutosOk => _m != null && _m! <= 59;
+  int get _desde => widget.desde.hour * 60 + widget.desde.minute;
+  int get _hasta => widget.hasta.hour * 60 + widget.hasta.minute;
+
+  /// Rango completo (00:00 a 23:59): no hace falta mostrarlo.
+  bool get _todoElDia => _desde == 0 && _hasta == 23 * 60 + 59;
+
+  /// La hora existe y alguna de sus horas:minutos cae dentro del rango.
+  bool get _horaOk =>
+      _h != null &&
+      _h! <= 23 &&
+      _h! >= widget.desde.hour &&
+      _h! <= widget.hasta.hour;
+
+  bool get _minutosOk =>
+      _m != null &&
+      _m! <= 59 &&
+      _m! % widget.paso == 0 &&
+      (!_horaOk || _enRango(_h! * 60 + _m!));
+
+  bool _enRango(int minutos) => minutos >= _desde && minutos <= _hasta;
 
   @override
   void initState() {
@@ -101,10 +143,21 @@ class _DialogoHoraState extends State<_DialogoHora> {
 
   @override
   Widget build(BuildContext context) {
-    // Vacía: solo se desactiva Aceptar. Fuera de rango: se avisa en rojo.
-    final error = _h != null && !_horaOk
-        ? 'La hora va de 00 a 23'
-        : (_m != null && !_minutosOk ? 'Los minutos van de 00 a 59' : null);
+    // Vacía: solo se desactiva Aceptar. Fuera del rango: la casilla en rojo.
+    final fuera = (_h != null && !_horaOk) || (_m != null && !_minutosOk);
+    final partes = [
+      if (!_todoElDia)
+        'Entre ${_dos(widget.desde.hour)}:${_dos(widget.desde.minute)} '
+            'y ${_dos(widget.hasta.hour)}:${_dos(widget.hasta.minute)}',
+      if (widget.paso > 1) 'minutos de ${widget.paso} en ${widget.paso}',
+    ];
+    final aviso = partes.isNotEmpty
+        ? partes.join(' · ')
+        : (fuera
+            ? (_h != null && _h! > 23
+                ? 'La hora va de 00 a 23'
+                : 'Los minutos van de 00 a 59')
+            : null);
     final lista = _horaOk && _minutosOk;
 
     return Dialog(
@@ -168,13 +221,16 @@ class _DialogoHoraState extends State<_DialogoHora> {
               ),
               SizedBox(
                 height: 22,
-                child: error == null
+                child: aviso == null
                     ? null
                     : Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(error,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.error)),
+                        child: Text(aviso,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: fuera
+                                    ? AppColors.error
+                                    : AppColors.textSecondary)),
                       ),
               ),
               const SizedBox(height: 6),

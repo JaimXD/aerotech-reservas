@@ -537,6 +537,12 @@ def admin_listar_vuelos():
     ))
 
 
+@app.route("/api/admin/vuelos/opciones", methods=["GET"])
+def admin_opciones_vuelo():
+    """Aerolíneas y ciudades registradas (selectores del formulario)."""
+    return _admin_vuelos(admin_vuelo_service.opciones)
+
+
 @app.route("/api/admin/vuelos/<int:vuelo_id>", methods=["GET"])
 def admin_detalle_vuelo(vuelo_id):
     return _admin_vuelos(lambda: admin_vuelo_service.detalle(vuelo_id))

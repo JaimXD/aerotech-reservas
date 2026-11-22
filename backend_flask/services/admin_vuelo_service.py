@@ -1,3 +1,4 @@
+import hashlib
 import re
 import unicodedata
 from datetime import datetime, timedelta
@@ -24,9 +25,16 @@ class AdminVueloService:
     ZONA = "America/Guayaquil"
     IVA = Decimal("1.15")
     LETRAS = "ABCDEF"
-    MAX_FILAS = 60
+    # Cabinas como las de aviones reales: asientos por fila → (mín., máx. de filas)
+    #   2: Beechcraft 1900 · 3: Jetstream 32 · 4: ATR 72, Embraer 190
+    #   5: Airbus A220 · 6: Airbus A320, Boeing 737
+    CABINAS = {2: (4, 10), 3: (4, 10), 4: (10, 25), 5: (20, 30), 6: (20, 40)}
     PRECIO_MAXIMO = 10000
     DURACION_MAXIMA = timedelta(hours=24)
+    # El vuelo comercial más corto del país (p. ej. Quito–Coca) dura ~30 min
+    DURACION_MINIMA = timedelta(minutes=30)
+    # Las horas van de 5 en 5 minutos, como en los horarios reales
+    PASO_MINUTOS = 5
     POR_PAGINA = 10
     ESTADOS = ("PROGRAMADO", "COMPLETO", "SALIO", "CANCELADO")
 
@@ -93,9 +101,22 @@ class AdminVueloService:
     def _con_iva(self, valor):
         return float((Decimal(valor or 0) * self.IVA).quantize(Decimal("0.01"), ROUND_HALF_UP))
 
+    # Datos que cambia el administrador. Las compras de los clientes no los
+    # tocan, así que no cuentan como un conflicto al editar.
+    _CAMPOS_EDITABLES = ("aerolinea", "origen", "destino", "fecha", "fecha_llegada",
+                         "hora_salida", "hora_llegada", "precio", "filas", "por_fila")
+
+    def _huella(self, f):
+        """Resumen de los datos editables del vuelo. Si cambia entre que el
+        administrador abre el formulario y guarda, otro lo modificó."""
+        datos = [str(f[c]) for c in self._CAMPOS_EDITABLES]
+        datos.append(str(f["estado"] == "CANCELADO"))
+        return hashlib.sha256("|".join(datos).encode("utf-8")).hexdigest()[:16]
+
     def _a_dict(self, f):
         return {
             "id": f["id"],
+            "huella": self._huella(f),
             "aerolinea": f["aerolinea"],
             "origen": f["origen"],
             "destino": f["destino"],
@@ -182,11 +203,7 @@ class AdminVueloService:
             """, params)
             vuelos = [self._a_dict(f) for f in cursor.fetchall()]
 
-            cursor.execute("SELECT nombre FROM aerolineas ORDER BY nombre")
-            aerolineas = [f["nombre"] for f in cursor.fetchall()]
-
-            cursor.execute("SELECT nombre FROM ciudades ORDER BY nombre")
-            ciudades = [f["nombre"] for f in cursor.fetchall()]
+            aerolineas, ciudades = self._opciones(cursor)
 
             return {
                 "vuelos": vuelos,
@@ -202,6 +219,26 @@ class AdminVueloService:
             conexion.close()
 
     # ───────────────────────── Detalle ─────────────────────────
+
+    @staticmethod
+    def _opciones(cursor):
+        """Aerolíneas y ciudades registradas, en orden alfabético."""
+        cursor.execute("SELECT nombre FROM aerolineas ORDER BY nombre")
+        aerolineas = [f["nombre"] for f in cursor.fetchall()]
+        cursor.execute("SELECT nombre FROM ciudades ORDER BY nombre")
+        ciudades = [f["nombre"] for f in cursor.fetchall()]
+        return aerolineas, ciudades
+
+    def opciones(self):
+        """Para los selectores del formulario de vuelo."""
+        conexion = Database.obtener_conexion()
+        cursor = conexion.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            aerolineas, ciudades = self._opciones(cursor)
+            return {"aerolineas": aerolineas, "ciudades": ciudades}
+        finally:
+            cursor.close()
+            conexion.close()
 
     def detalle(self, vuelo_id):
         conexion = Database.obtener_conexion()
@@ -351,8 +388,13 @@ class AdminVueloService:
         cursor.execute(f"SELECT (NOW() AT TIME ZONE '{self.ZONA}') AS ahora")
         if salida <= cursor.fetchone()["ahora"]:
             raise ErrorVuelo("La salida debe ser en el futuro")
+        if hora_salida.minute % self.PASO_MINUTOS or hora_llegada.minute % self.PASO_MINUTOS:
+            raise ErrorVuelo(
+                f"Las horas van de {self.PASO_MINUTOS} en {self.PASO_MINUTOS} minutos (08:00, 08:05…)")
         if llegada <= salida:
             raise ErrorVuelo("La llegada debe ser después de la salida")
+        if llegada - salida < self.DURACION_MINIMA:
+            raise ErrorVuelo("Un vuelo debe durar al menos 30 minutos")
         if llegada - salida > self.DURACION_MAXIMA:
             raise ErrorVuelo("Un vuelo no puede durar más de 24 horas")
 
@@ -372,10 +414,12 @@ class AdminVueloService:
             por_fila = int(datos.get("asientos_por_fila"))
         except (TypeError, ValueError):
             raise ErrorVuelo("Indica las filas y los asientos por fila")
-        if not 1 <= filas <= self.MAX_FILAS:
-            raise ErrorVuelo(f"Las filas deben estar entre 1 y {self.MAX_FILAS}")
-        if not 2 <= por_fila <= len(self.LETRAS):
+        if por_fila not in self.CABINAS:
             raise ErrorVuelo(f"Los asientos por fila deben estar entre 2 y {len(self.LETRAS)}")
+        minimo, maximo = self.CABINAS[por_fila]
+        if not minimo <= filas <= maximo:
+            raise ErrorVuelo(
+                f"Con {por_fila} asientos por fila, las filas deben estar entre {minimo} y {maximo}")
 
         return {
             "aerolinea": aerolinea,
@@ -436,6 +480,14 @@ class AdminVueloService:
             if cursor.fetchone() is None:
                 raise ErrorVuelo("Vuelo no encontrado", 404)
             actual = self._obtener(cursor, vuelo_id)
+
+            # Control de concurrencia optimista: el formulario envía la huella
+            # del vuelo que cargó. Si ya no coincide, otro administrador lo
+            # cambió mientras se editaba y no se sobrescriben sus cambios.
+            if datos.get("huella") != self._huella(actual):
+                raise ErrorVuelo(
+                    "Otro administrador modificó este vuelo mientras lo editabas. "
+                    "Vuelve a abrirlo para ver los cambios.", 409)
 
             if actual["estado"] == "CANCELADO":
                 raise ErrorVuelo("Reactiva el vuelo antes de editarlo", 409)
