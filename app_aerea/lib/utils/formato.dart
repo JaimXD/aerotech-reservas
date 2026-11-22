@@ -49,11 +49,18 @@ class Formato {
       '${d.day} ${_mesesCortos[d.month - 1]}';
 
   /// "dom 8 nov"
-  static String fechaConDia(DateTime d) => '${diaCorto(d)} ${fechaCorta(d)}';
+  /// Con el año al final si no es el actual: "vie 17 nov 2028".
+  static String fechaConDia(DateTime d) =>
+      '${diaCorto(d)} ${fechaCorta(d)}${_anioSiOtro(d, ' ')}';
 
   /// "Jueves 12 de noviembre"
+  /// Con el año si no es el actual: "Viernes 17 de noviembre de 2028".
   static String fechaLarga(DateTime d) =>
-      '${_diasLargos[d.weekday - 1]} ${d.day} de ${_meses[d.month - 1]}';
+      '${_diasLargos[d.weekday - 1]} ${d.day} de ${_meses[d.month - 1]}'
+      '${_anioSiOtro(d, ' de ')}';
+
+  static String _anioSiOtro(DateTime d, String separador) =>
+      d.year == DateTime.now().year ? '' : '$separador${d.year}';
 
   /// "Noviembre 2026"
 

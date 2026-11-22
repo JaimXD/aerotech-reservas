@@ -8,6 +8,7 @@ import '../services/asiento_service.dart';
 import '../services/carrito_service.dart';
 import '../services/reservas_service.dart';
 import '../utils/formato.dart';
+import '../widgets/acceso.dart';
 import '../widgets/asiento_boton.dart';
 import '../widgets/custom_toast.dart';
 import 'carrito_page.dart';
@@ -170,6 +171,11 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
 
   void cambiarSeleccion(Asiento asiento) {
     if (!asiento.disponible || reservando) return;
+    // Sin cuenta se puede mirar el mapa, pero para elegir hay que entrar
+    if (!Acceso.conSesion) {
+      _iniciarSesion(elegir: asiento.numeroAsiento);
+      return;
+    }
     final numero = asiento.numeroAsiento;
 
     if (seleccionados.contains(numero)) {
@@ -185,6 +191,25 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
       seleccionados.add(numero);
       seleccionados.sort(_ordenAsientos);
     });
+  }
+
+  /// Pide iniciar sesión y, al volver, recarga el mapa (con el carrito de
+  /// la cuenta) y marca el asiento [elegir] si sigue libre.
+  Future<void> _iniciarSesion({String? elegir}) async {
+    final ok =
+        await Acceso.pedirSesion(context, motivo: 'elegir tus asientos');
+    if (!ok || !mounted) return;
+    _primeraCarga = true;
+    await cargarAsientos();
+    if (!mounted || elegir == null || seleccionados.contains(elegir)) return;
+    final asiento =
+        asientos.where((a) => a.numeroAsiento == elegir).firstOrNull;
+    if (asiento != null && asiento.disponible) {
+      cambiarSeleccion(asiento);
+    } else {
+      CustomToast.showWarning(
+          context, 'El asiento $elegir ya no está disponible. Elige otro.');
+    }
   }
 
   double get total => seleccionados.length * widget.vuelo.precio;
@@ -1005,10 +1030,13 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
   }
 
   Widget _botonConfirmar(bool haySeleccion) {
-    final activo = haySeleccion && !reservando;
+    final invitado = !Acceso.conSesion;
+    final activo = (haySeleccion || invitado) && !reservando;
     final texto = reservando
         ? 'Procesando...'
-        : !modoCarrito
+        : invitado
+            ? 'Inicia sesión para elegir'
+            : !modoCarrito
             ? 'Modificar reserva'
             : (enCarrito ? 'Actualizar carrito' : 'Agregar al carrito');
     final colorTexto =
@@ -1021,7 +1049,7 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
         cursor:
             activo ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
         child: GestureDetector(
-          onTap: activo ? reservar : null,
+          onTap: activo ? (invitado ? _iniciarSesion : reservar) : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             height: 54,
@@ -1051,7 +1079,9 @@ class _SeleccionAsientosPageState extends State<SeleccionAsientosPage> {
                             strokeWidth: 2, color: Colors.white),
                       )
                     : Icon(
-                        modoCarrito
+                        invitado
+                            ? Icons.login_rounded
+                            : modoCarrito
                             ? Icons.shopping_cart_outlined
                             : Icons.check_circle_outline_rounded,
                         color: colorTexto,

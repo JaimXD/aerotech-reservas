@@ -4,11 +4,10 @@ import '../models/perfil.dart';
 import '../models/reserva.dart';
 import '../services/perfil_service.dart';
 import '../services/reservas_service.dart';
-import '../services/session_manager.dart';
 import '../utils/formato.dart';
 import '../widgets/barra_superior.dart';
 import '../widgets/custom_toast.dart';
-import 'login_page.dart';
+import '../widgets/acceso.dart';
 import 'reservas_page.dart';
 
 const _bordeSuave = Color(0xFFE6DED6);
@@ -69,15 +68,7 @@ class _PerfilPageState extends State<PerfilPage> {
     );
   }
 
-  Future<void> _cerrarSesion() async {
-    await SessionManager().cerrarSesion();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
-  }
+  Future<void> _cerrarSesion() => Acceso.cerrarSesion(context);
 
   // ── Interfaz ──────────────────────────────────────────────────
 

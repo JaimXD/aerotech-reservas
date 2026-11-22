@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../utils/formato.dart';
+import 'selector_anio.dart';
 
 const _franja = Color(0xFFEFE3D9); // rango ya elegido
 const _franjaPrevia = Color(0xFFF6EEE7); // rango mientras se pasa el mouse
@@ -109,6 +110,16 @@ class _SelectorFechasState extends State<_SelectorFechas> {
   bool _puedeAvanzar(int visibles) => _sumarMeses(_mes, visibles - 1)
       .isBefore(DateTime(widget.ultimaFecha.year, widget.ultimaFecha.month));
 
+  /// Salta al mismo mes de otro año (sin salirse de las fechas permitidas).
+  void _irAnio(int anio, int visibles) => setState(() => _mes = SelectorAnio.mesEn(
+        anio,
+        _mes,
+        DateTime(widget.primeraFecha.year, widget.primeraFecha.month),
+        _sumarMeses(
+            DateTime(widget.ultimaFecha.year, widget.ultimaFecha.month),
+            -(visibles - 1)),
+      ));
+
   // ── Interfaz ─────────────────────────────────────────────────────
 
   @override
@@ -133,7 +144,14 @@ class _SelectorFechasState extends State<_SelectorFechas> {
                     _encabezado(),
                     const SizedBox(height: 16),
                     _resumen(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
+                    SelectorAnio(
+                      desde: widget.primeraFecha.year,
+                      hasta: widget.ultimaFecha.year,
+                      actual: _mes.year,
+                      onElegir: (a) => _irAnio(a, visibles),
+                    ),
+                    const SizedBox(height: 16),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

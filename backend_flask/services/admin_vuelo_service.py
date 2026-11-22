@@ -386,7 +386,8 @@ class AdminVueloService:
             datos.get("fecha_llegada"), datos.get("hora_llegada"), "llegada")
 
         cursor.execute(f"SELECT (NOW() AT TIME ZONE '{self.ZONA}') AS ahora")
-        if salida <= cursor.fetchone()["ahora"]:
+        ahora = cursor.fetchone()["ahora"]
+        if salida <= ahora:
             raise ErrorVuelo("La salida debe ser en el futuro")
         if hora_salida.minute % self.PASO_MINUTOS or hora_llegada.minute % self.PASO_MINUTOS:
             raise ErrorVuelo(

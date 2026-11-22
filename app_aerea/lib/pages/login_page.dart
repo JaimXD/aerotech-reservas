@@ -5,10 +5,9 @@ import '../config/app_theme.dart';
 import '../models/login_request.dart';
 import '../services/auth_service.dart';
 import '../services/session_manager.dart';
+import '../widgets/acceso.dart';
 import '../widgets/custom_toast.dart';
 import 'registro_correo_page.dart';
-import 'vuelos_page.dart';
-import 'admin/admin_page.dart';
 
 /// Pantalla de acceso de AeroTech Reservas.
 ///
@@ -53,39 +52,12 @@ class _LoginPageState extends State<LoginPage> {
   AutovalidateMode _modoValidacion = AutovalidateMode.disabled;
 
   @override
-  void initState() {
-    super.initState();
-    verificarSesionActiva();
-  }
-
-  @override
   void dispose() {
     usuarioCtrl.dispose();
     passwordCtrl.dispose();
     _usuarioFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
-  }
-
-  /// El administrador entra a su panel; el cliente, a la búsqueda de vuelos.
-  Widget _paginaInicio() =>
-      sessionManager.isAdmin ? const AdminPage() : const VuelosPage();
-
-  Future<void> verificarSesionActiva() async {
-    try {
-      final tieneSesion = await sessionManager.inicializarSesion();
-      if (!mounted) return;
-      if (tieneSesion) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => _paginaInicio()),
-        );
-      }
-      // No se muestra «Tu sesión ha expirado» cuando simplemente se abre
-      // la pantalla sin haber iniciado sesión previamente.
-    } catch (_) {
-      // Si no hay sesión recuperable, se muestra el formulario normalmente.
-    }
   }
 
   String? _validarUsuario(String? valor) {
@@ -137,10 +109,8 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
       CustomToast.showSuccess(context, 'Sesión iniciada correctamente');
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => _paginaInicio()),
-      );
+      // Admin → panel; cliente → vuelve a donde estaba (p. ej. los asientos)
+      Acceso.alEntrar(context);
     } catch (e) {
       if (!mounted) return;
       setState(() => mensajeError = CustomToast.parseError(e));
@@ -673,6 +643,15 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ),
+              if (Navigator.canPop(context)) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed:
+                      cargando ? null : () => Navigator.pop(context, false),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('Seguir viendo vuelos'),
+                ),
+              ],
               const SizedBox(height: 24),
               const Center(
                 child: Text(

@@ -3,6 +3,7 @@ import '../config/app_theme.dart';
 import '../pages/carrito_page.dart';
 import '../services/carrito_service.dart';
 import '../services/session_manager.dart';
+import 'acceso.dart';
 
 enum SeccionApp { vuelos, reservas }
 
@@ -30,7 +31,16 @@ class BarraSuperior extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Se redibuja al iniciar o cerrar sesión
+    return ListenableBuilder(
+      listenable: SessionManager(),
+      builder: (context, _) => _barra(context),
+    );
+  }
+
+  Widget _barra(BuildContext context) {
     final session = SessionManager();
+    final invitado = session.token == null;
     final completo = session.nombreCompleto?.trim() ?? '';
     final nombre =
         completo.isNotEmpty ? completo : (session.username ?? 'Usuario');
@@ -58,24 +68,31 @@ class BarraSuperior extends StatelessWidget {
                           activo: actual == SeccionApp.vuelos,
                           onTap: onVuelos,
                         ),
-                        const SizedBox(width: 20),
-                        _EnlaceNav(
-                          texto: compacto ? 'Reservas' : 'Mis reservas',
-                          activo: actual == SeccionApp.reservas,
-                          onTap: onReservas,
-                        ),
-                        const Spacer(),
-                        if (mostrarCarrito) ...[
-                          const _BotonCarrito(),
-                          SizedBox(width: compacto ? 4 : 12),
+                        // «Mis reservas» solo tiene sentido con una cuenta
+                        if (!invitado) ...[
+                          const SizedBox(width: 20),
+                          _EnlaceNav(
+                            texto: compacto ? 'Reservas' : 'Mis reservas',
+                            activo: actual == SeccionApp.reservas,
+                            onTap: onReservas,
+                          ),
                         ],
-                        _MenuCuenta(
-                          nombre: nombre,
-                          usuario: session.username,
-                          compacto: compacto,
-                          onPerfil: onPerfil,
-                          onCerrarSesion: onCerrarSesion,
-                        ),
+                        const Spacer(),
+                        if (invitado)
+                          _BotonEntrar(compacto: compacto)
+                        else ...[
+                          if (mostrarCarrito) ...[
+                            const _BotonCarrito(),
+                            SizedBox(width: compacto ? 4 : 12),
+                          ],
+                          _MenuCuenta(
+                            nombre: nombre,
+                            usuario: session.username,
+                            compacto: compacto,
+                            onPerfil: onPerfil,
+                            onCerrarSesion: onCerrarSesion,
+                          ),
+                        ],
                       ],
                     );
                   },
@@ -211,6 +228,30 @@ class _BotonCarritoState extends State<_BotonCarrito> {
           style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
         );
       },
+    );
+  }
+}
+
+/// Para quien navega sin cuenta.
+class _BotonEntrar extends StatelessWidget {
+  final bool compacto;
+
+  const _BotonEntrar({required this.compacto});
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => Acceso.abrirLogin(context),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+        shape: const StadiumBorder(),
+        padding: EdgeInsets.symmetric(horizontal: compacto ? 12 : 18),
+        minimumSize: const Size(44, 42),
+      ),
+      icon: const Icon(Icons.person_outline_rounded, size: 19),
+      label: Text(compacto ? 'Entrar' : 'Iniciar sesión',
+          style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 }

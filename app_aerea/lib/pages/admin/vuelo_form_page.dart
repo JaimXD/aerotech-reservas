@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/app_theme.dart';
+import '../../config/reglas.dart';
 import '../../models/vuelo.dart';
 import '../../models/vuelo_admin.dart';
 import '../../services/admin_vuelo_service.dart';
@@ -246,7 +247,7 @@ class _VueloFormPageState extends State<VueloFormPage> {
         titulo: 'Fecha de salida',
         inicial: _fechaSalida,
         primera: hoy,
-        ultima: DateTime(hoy.year + 2, hoy.month, hoy.day));
+        ultima: Reglas.ultimaFechaVuelos());
     if (f != null) setState(() => _cambiarSalida(fecha: f));
   }
 

@@ -7,7 +7,7 @@ import '../services/registro_service.dart';
 import '../widgets/custom_toast.dart';
 import '../widgets/registro_layout.dart';
 import 'registro_correo_page.dart';
-import 'vuelos_page.dart';
+import '../widgets/acceso.dart';
 
 class RegistroPage extends StatefulWidget {
   final String correo;
@@ -186,11 +186,7 @@ class _RegistroPageState extends State<RegistroPage> {
 
       if (!mounted) return;
       CustomToast.showSuccess(context, '¡Bienvenido! Tu cuenta fue creada.');
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const VuelosPage()),
-        (_) => false,
-      );
+      Acceso.alEntrar(context);
     } on RegistroException catch (e) {
       if (!mounted) return;
       if (e.verificacionExpirada) {
@@ -225,9 +221,7 @@ class _RegistroPageState extends State<RegistroPage> {
         ],
       ),
     );
-    if (salir == true && mounted) {
-      Navigator.of(context).popUntil((r) => r.isFirst);
-    }
+    if (salir == true && mounted) Acceso.volverAlLogin(context);
   }
 
   Future<void> _reiniciarPorExpiracion() async {
@@ -250,7 +244,7 @@ class _RegistroPageState extends State<RegistroPage> {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
           builder: (_) => RegistroCorreoPage(correoInicial: widget.correo)),
-      (r) => r.isFirst,
+      (r) => r.settings.name == Acceso.rutaLogin || r.isFirst,
     );
   }
 

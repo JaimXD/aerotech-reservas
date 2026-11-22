@@ -12,7 +12,7 @@ import '../utils/formato.dart';
 import '../widgets/barra_superior.dart';
 import '../widgets/custom_toast.dart';
 import 'compra_confirmada_page.dart';
-import 'login_page.dart';
+import '../widgets/acceso.dart';
 import 'perfil_page.dart';
 import 'reservas_page.dart';
 import 'seleccion_asientos_page.dart';
@@ -104,15 +104,7 @@ class _CarritoPageState extends State<CarritoPage> {
         MaterialPageRoute(builder: (_) => const PerfilPage()),
       );
 
-  Future<void> _cerrarSesion() async {
-    await SessionManager().cerrarSesion();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
-  }
+  Future<void> _cerrarSesion() => Acceso.cerrarSesion(context);
 
   void _cambiarAsientos(ItemCarrito item) {
     Navigator.push(

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../config/app_theme.dart';
-import '../../services/session_manager.dart';
 import '../../widgets/admin/menu_lateral_admin.dart';
-import '../login_page.dart';
+import '../../widgets/acceso.dart';
 import 'panel_admin_page.dart';
 import 'reservas_admin_page.dart';
 import 'usuarios_admin_page.dart';
@@ -36,15 +35,7 @@ class _AdminPageState extends State<AdminPage> {
         _vueloInicial = vuelo;
       });
 
-  Future<void> _cerrarSesion() async {
-    await SessionManager().cerrarSesion();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
-  }
+  Future<void> _cerrarSesion() => Acceso.cerrarSesion(context);
 
   Widget _contenido() {
     switch (_seccion) {

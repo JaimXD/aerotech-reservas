@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
+import '../config/reglas.dart';
 import '../models/vuelo.dart';
 import '../services/session_manager.dart';
 import '../services/vuelos_service.dart';
@@ -9,7 +10,7 @@ import '../widgets/barra_superior.dart';
 import '../widgets/custom_toast.dart';
 import '../widgets/selector_fechas.dart';
 import '../widgets/vuelo_card.dart';
-import 'login_page.dart';
+import '../widgets/acceso.dart';
 import 'perfil_page.dart';
 import 'reservas_page.dart';
 import 'seleccion_asientos_page.dart';
@@ -208,7 +209,7 @@ class _VuelosPageState extends State<VuelosPage> {
         origen: _origenBuscado,
         destino: _destinoBuscado,
         fechaInicio: Formato.iso(hoy),
-        fechaFin: Formato.iso(Formato.sumarDias(hoy, 365)),
+        fechaFin: Formato.iso(Reglas.ultimaFechaVuelos()),
       );
       if (!mounted || peticion != _peticion) return;
 
@@ -251,7 +252,7 @@ class _VuelosPageState extends State<VuelosPage> {
       context,
       inicial: _rango.start.isBefore(hoy) ? null : _rango,
       primeraFecha: hoy,
-      ultimaFecha: Formato.sumarDias(hoy, 365),
+      ultimaFecha: Reglas.ultimaFechaVuelos(),
     );
 
     if (elegido != null) {
@@ -338,29 +339,25 @@ class _VuelosPageState extends State<VuelosPage> {
     ).then((_) => _buscar(recargar: true));
   }
 
-  void _abrirPerfil() {
+  Future<void> _abrirPerfil() async {
+    if (!await Acceso.pedirSesion(context, motivo: 'ver tu perfil')) return;
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PerfilPage()),
     ).then((_) => _buscar(recargar: true));
   }
 
-  void _abrirMisReservas() {
+  Future<void> _abrirMisReservas() async {
+    if (!await Acceso.pedirSesion(context, motivo: 'ver tus reservas')) return;
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ReservasPage()),
     ).then((_) => _buscar(recargar: true));
   }
 
-  Future<void> _cerrarSesion() async {
-    await _session.cerrarSesion();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
-  }
+  Future<void> _cerrarSesion() => Acceso.cerrarSesion(context);
 
   // ════════════════════════════════════════════════════════════════
   //  Textos de apoyo
@@ -899,7 +896,7 @@ class _VuelosPageState extends State<VuelosPage> {
             ),
           ] else
             const Text(
-              'Tampoco encontramos vuelos en esta ruta durante el próximo año. ',
+              'Tampoco encontramos vuelos próximos en esta ruta. ',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),

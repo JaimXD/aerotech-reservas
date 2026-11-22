@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import '../config/app_theme.dart';
 import '../models/reserva.dart';
 import '../services/reservas_service.dart';
-import '../services/session_manager.dart';
 import '../widgets/barra_superior.dart';
 import '../widgets/custom_toast.dart';
 import '../widgets/dialogos_reserva.dart';
 import '../widgets/tarjeta_reserva.dart';
 import '../widgets/dialogo_factura.dart';
-import 'login_page.dart';
+import '../widgets/acceso.dart';
 import 'perfil_page.dart';
 import 'seleccion_asientos_page.dart';
 
@@ -119,15 +118,7 @@ class _ReservasPageState extends State<ReservasPage> {
     );
   }
 
-  Future<void> _cerrarSesion() async {
-    await SessionManager().cerrarSesion();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
-  }
+  Future<void> _cerrarSesion() => Acceso.cerrarSesion(context);
 
   void _cambiarAsientos(Reserva r) {
     Navigator.push(

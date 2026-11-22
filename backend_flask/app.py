@@ -52,6 +52,20 @@ def obtener_usuario_desde_token():
         print("Error al validar token:", repr(e))
         return None, jsonify({"error": "Error al validar token", "detalle": str(e)}), 500   
 
+def obtener_usuario_opcional():
+    """Para lo que también puede ver un visitante (vuelos, rutas y mapa de
+    asientos). Devuelve el usuario si envió un token válido o None si
+    navega sin cuenta."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[len("Bearer "):].strip() if auth_header.startswith("Bearer ") else ""
+    if not token:
+        return None
+    try:
+        return auth_service.validar_token(token)
+    except Exception:
+        return None
+
+
 def obtener_admin_desde_token():
     """Igual que obtener_usuario_desde_token, pero además exige rol admin (403)."""
     usuario, error, codigo = obtener_usuario_desde_token()
@@ -164,13 +178,7 @@ def perfil_usuario():
 
 @app.route("/api/vuelos", methods=["GET"])
 def vuelos():
-    print("vuelos????????????????????????????????????????????????????????????????????")
-    usuario, error, codigo = obtener_usuario_desde_token()
-    print(error, codigo)
-
-    if error:
-        return error, codigo
-
+    # Público: se puede buscar vuelos sin iniciar sesión
     origen = request.args.get("origen")
     destino = request.args.get("destino")
     fecha = request.args.get("fecha")
@@ -196,10 +204,7 @@ def vuelos():
 
 @app.route("/api/vuelos/rutas", methods=["GET"])
 def rutas_vuelos():
-    usuario, error, codigo = obtener_usuario_desde_token()
-    if error:
-        return error, codigo
-
+    # Público: las ciudades del buscador
     try:
         return jsonify(vuelo_service.listar_rutas()), 200
     except Exception:
@@ -332,13 +337,13 @@ def editar_reserva(reserva_id):
 
 @app.route("/api/vuelos/<int:vuelo_id>/asientos", methods=["GET"])
 def listar_asientos_vuelo(vuelo_id):
-    usuario, error, codigo = obtener_usuario_desde_token()
-
-    if error:
-        return error, codigo
+    # Público: el visitante ve qué asientos están libres. Con sesión,
+    # además se marcan los que tiene en su carrito.
+    usuario = obtener_usuario_opcional()
 
     try:
-        asientos = asiento_service.listar_asientos_por_vuelo(vuelo_id, usuario["id"])
+        asientos = asiento_service.listar_asientos_por_vuelo(
+            vuelo_id, usuario["id"] if usuario else None)
 
         return jsonify(asientos), 200
 

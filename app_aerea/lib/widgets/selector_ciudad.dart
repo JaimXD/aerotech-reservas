@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/app_theme.dart';
+import '../utils/entradas.dart';
 
 /// Una ciudad que se puede elegir en el selector.
 class OpcionCiudad {
@@ -201,6 +202,9 @@ class _SelectorCiudadState extends State<SelectorCiudad> {
                         child: TextField(
                           controller: _busqueda,
                           focusNode: _focoBusqueda,
+                          // Solo lo que puede tener el nombre de una ciudad:
+                          // letras (con tildes y ñ), espacios, punto, ' y -
+                          inputFormatters: Entradas.ciudad,
                           onChanged: (_) => setState(() {}),
                           onSubmitted: (_) {
                             if (filtradas.isNotEmpty)

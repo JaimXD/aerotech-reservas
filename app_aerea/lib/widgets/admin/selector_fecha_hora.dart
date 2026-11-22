@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../config/app_theme.dart';
 import '../../utils/formato.dart';
+import '../selector_anio.dart';
 
 const _diasSemana = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const _franja = Color(0xFFEFE3D9);
@@ -418,6 +419,18 @@ class _CalendarioState extends State<_Calendario> {
                     color: AppColors.primary),
               ),
               const SizedBox(height: 14),
+              SelectorAnio(
+                desde: widget.primera.year,
+                hasta: widget.ultima.year,
+                actual: _mes.year,
+                onElegir: (a) => setState(() => _mes = SelectorAnio.mesEn(
+                      a,
+                      _mes,
+                      DateTime(widget.primera.year, widget.primera.month),
+                      DateTime(widget.ultima.year, widget.ultima.month),
+                    )),
+              ),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   IconButton(
